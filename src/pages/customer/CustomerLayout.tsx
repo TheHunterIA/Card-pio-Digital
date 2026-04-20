@@ -40,7 +40,7 @@ export default function CustomerLayout() {
   const navItems = [
     { label: 'Início', icon: Home, path: '/' },
     { label: 'Cardápio', icon: UtensilsCrossed, path: '/cardapio', badge: cartItemCount > 0 ? cartItemCount : null },
-    { label: 'Comanda', icon: ClipboardList, path: '/status', badge: hasActiveOrder ? '!' : null },
+    { label: hasActiveOrder ? 'Comanda Ativa' : 'Meus Pedidos', icon: ClipboardList, path: hasActiveOrder ? '/status' : '/pedidos', badge: hasActiveOrder ? '!' : null },
   ];
 
   return (
@@ -51,7 +51,9 @@ export default function CustomerLayout() {
           <div className="max-w-5xl mx-auto px-5 h-20 flex items-center justify-between">
             <button 
               onClick={() => {
-                if (location.pathname === '/status' || location.pathname === '/checkout') {
+                if (location.pathname === '/status') {
+                  navigate('/pedidos');
+                } else if (location.pathname === '/checkout') {
                   navigate('/cardapio');
                 } else if (window.history.length <= 1) {
                   navigate('/');

@@ -24,9 +24,22 @@ export default function PrintTicket({ order, config, isVisitor, tableNumber, vis
       </div>
 
       <div className="mb-4 text-center">
-        <p className="text-lg font-bold">{isVisitor ? 'PASSE DE VISITANTE' : `COMANDA MESA ${order?.tableNumber}`}</p>
-        <p className="text-[10px]">{isVisitor ? `MESA ${tableNumber}` : `Pedido: ${order?.id}`}</p>
-        <p className="text-[10px]">{new Date().toLocaleString('pt-BR')}</p>
+        {!isVisitor && order?.type === 'delivery' ? (
+          <>
+            <p className="text-lg font-bold">DELIVERY</p>
+            <p className="text-[10px] font-bold">Cliente: {order?.customerName}</p>
+            {order?.whatsapp && <p className="text-[10px]">WhatsApp: {order?.whatsapp}</p>}
+            {order?.address && <p className="text-[10px]">End: {order?.address}, {order?.addressNumber} {order?.addressComplement ? ` - ${order?.addressComplement}` : ''}</p>}
+            <p className="text-[10px] mt-1">Pedido: #{order?.id?.substring(0,6)}</p>
+          </>
+        ) : (
+          <>
+            <p className="text-lg font-bold">{isVisitor ? 'PASSE DE VISITANTE' : `COMANDA MESA ${order?.tableNumber || '-'}`}</p>
+            <p className="text-[10px]">{isVisitor ? `MESA ${tableNumber}` : `Pedido: #${order?.id?.substring(0,6)}`}</p>
+            {!isVisitor && order?.customerName && <p className="text-[10px]">Cliente: {order.customerName}</p>}
+          </>
+        )}
+        <p className="text-[10px] mt-1">{new Date().toLocaleString('pt-BR')}</p>
       </div>
 
       {!isVisitor && order && (

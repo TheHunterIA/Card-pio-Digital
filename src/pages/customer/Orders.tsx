@@ -162,7 +162,14 @@ export default function Orders() {
                         {React.createElement(getStatusIcon(order.status), { className: "w-6 h-6", strokeWidth: 2 })}
                       </div>
                       <div>
-                        <h3 className="font-display font-bold text-ink text-sm">Pedido #{order.id.substring(0, 4).toUpperCase()}</h3>
+                        <h3 className="font-display font-bold text-ink text-sm flex items-center gap-1.5">
+                           Pedido #{order.id.substring(0, 4).toUpperCase()}
+                           {order.type === 'dine-in' ? (
+                             <span className="bg-oat text-ink px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase">Mesa {order.tableNumber || '-'}</span>
+                           ) : (
+                             <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded text-[8px] font-black tracking-widest uppercase">Entrega</span>
+                           )}
+                        </h3>
                         <p className="text-[10px] text-ink-muted font-bold uppercase tracking-wider">
                           {new Date(order.createdAt).toLocaleDateString('pt-BR')} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total)}
                         </p>

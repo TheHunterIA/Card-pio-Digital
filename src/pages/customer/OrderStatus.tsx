@@ -91,24 +91,32 @@ export default function OrderStatus() {
 
   // If at table, fetch all active orders for this table to show the "Table Session"
   useEffect(() => {
-    if (!tableNumber) return;
+    const activeTable = order?.tableNumber || tableNumber;
+    if (!activeTable) return;
 
     const q = query(
       collection(db, 'orders'), 
-      where('tableNumber', '==', tableNumber),
+      where('tableNumber', '==', activeTable),
       where('status', 'not-in', ['finalizado', 'cancelado'])
     );
 
     const unsub = onSnapshot(q, (snapshot) => {
       const ordersData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
-      setTableOrders(ordersData);
+      
+      // Ensure the current order is always part of the session if it's missing (e.g. if it was just finalized)
+      let allTableOrders = [...ordersData];
+      if (order && !allTableOrders.some(o => o.id === order.id)) {
+         allTableOrders.push(order);
+      }
+      
+      setTableOrders(allTableOrders);
       
       // Calculate Session Aggregates
-      const total = ordersData.reduce((acc, curr) => acc + curr.total, 0);
+      const total = allTableOrders.reduce((acc, curr) => acc + curr.total, 0);
       setSessionTotal(total);
 
       const itemsMap: Record<string, {name: string, qty: number, price: number, users: Set<string>, extras?: any[]}> = {};
-      ordersData.forEach(o => {
+      allTableOrders.forEach(o => {
         o.items.forEach(i => {
           const extrasPrice = (i.selectedExtras || []).reduce((acc, e) => acc + e.price, 0);
           const extrasKey = (i.selectedExtras || []).map(e => e.id).sort().join(',');
@@ -132,7 +140,7 @@ export default function OrderStatus() {
     });
 
     return () => unsub();
-  }, [tableNumber]);
+  }, [tableNumber, order]);
 
   useEffect(() => {
     if (!isChecking && (!currentOrderId || !order)) {
@@ -333,6 +341,7 @@ export default function OrderStatus() {
         )}
 
         {/* Consumption Summary (Comanda Compartilhada) */}
+        {order.type === 'dine-in' ? (
         <div className="bg-white rounded-[40px] p-8 border border-black/5 shadow-sm space-y-6">
           <div className="flex items-center justify-between">
              <h3 className="font-display font-bold text-ink-muted uppercase tracking-[0.2em] text-[10px]">Comanda de Mesa</h3>
@@ -367,7 +376,7 @@ export default function OrderStatus() {
           <div className="pt-6 border-t border-black/5">
              <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Total da Mesa</span>
-                <span className="text-lg font-display font-black text-ink">R$ {sessionTotal.toFixed(2)}</span>
+                <span className="text-lg font-display font-black text-ink">R$ {Math.max(sessionTotal, order.total).toFixed(2)}</span>
              </div>
              <div className="flex justify-between items-center mb-6">
                 <span className="font-display font-black text-ink uppercase tracking-tighter text-xl">Sua Parte</span>
@@ -375,10 +384,63 @@ export default function OrderStatus() {
              </div>
           </div>
         </div>
+        ) : (
+        <div className="bg-white rounded-[40px] p-8 border border-black/5 shadow-sm space-y-6">
+          <div className="flex items-center justify-between">
+             <h3 className="font-display font-bold text-ink-muted uppercase tracking-[0.2em] text-[10px]">Resumo do Pedido</h3>
+             <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                <Motorbike className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase">Delivery</span>
+             </div>
+          </div>
+          
+          <div className="space-y-6">
+            {order.items.map((item, idx) => {
+              const extrasTotal = (item.selectedExtras || []).reduce((acc: number, cur: any) => acc + cur.price, 0);
+              const unitPrice = item.item.price + extrasTotal;
+              
+              return (
+              <div key={idx} className="flex justify-between items-start">
+                <div className="flex gap-4">
+                   <div className="w-10 h-10 bg-oat rounded-xl flex items-center justify-center font-bold text-brand">
+                     {item.quantity}x
+                   </div>
+                   <div>
+                     <p className="text-sm font-bold text-ink leading-tight">{item.item.name}</p>
+                     {item.selectedExtras && item.selectedExtras.length > 0 && (
+                       <p className="text-[10px] text-brand font-bold mt-0.5">
+                         + {item.selectedExtras.map((e: any) => e.name).join(', ')}
+                       </p>
+                     )}
+                   </div>
+                </div>
+                <span className="text-sm font-bold text-ink">R$ {(unitPrice * item.quantity).toFixed(2)}</span>
+              </div>
+            )})}
+          </div>
 
-        {/* Rating for dine-in paid */}
+          <div className="pt-6 border-t border-black/5">
+             <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Subtotal</span>
+                <span className="text-lg font-display font-black text-ink">R$ {((order as any).subtotal || (order.total + ((order as any).discount || 0))).toFixed(2)}</span>
+             </div>
+             {(order as any).discount > 0 && (
+               <div className="flex justify-between items-center mb-2 text-emerald-600">
+                  <span className="text-xs font-bold uppercase tracking-wider">Desconto Aplicado</span>
+                  <span className="text-sm font-display font-black">- R$ {((order as any).discount).toFixed(2)}</span>
+               </div>
+             )}
+             <div className="flex justify-between items-center mb-6">
+                <span className="font-display font-black text-ink uppercase tracking-tighter text-xl">Total {order.paymentStatus === 'paid' ? 'Pago' : ''}</span>
+                <span className="font-display font-black text-brand text-2xl">R$ {order.total.toFixed(2)}</span>
+             </div>
+          </div>
+        </div>
+        )}
+
+        {/* Rating for dine-in paid or delivery finished */}
         <AnimatePresence>
-          {order.type === 'dine-in' && isPaid && !hasRated && (
+          {((order.type === 'dine-in' && isPaid) || (order.type === 'delivery' && order.status === 'finalizado')) && !hasRated && (
              <motion.div 
                initial={{ opacity: 0, y: 20 }}
                animate={{ opacity: 1, y: 0 }}
@@ -443,10 +505,10 @@ export default function OrderStatus() {
         )}
 
         <button 
-          onClick={() => navigate('/cardapio')}
+          onClick={() => navigate('/pedidos')}
           className="w-full py-6 text-ink-muted font-display font-black uppercase tracking-widest text-[10px] hover:text-ink transition-colors flex items-center justify-center gap-2"
         >
-          <UtensilsCrossed className="w-4 h-4" /> Voltar ao Cardápio Prime
+          <UtensilsCrossed className="w-4 h-4" /> Voltar aos Meus Pedidos
         </button>
       </div>
 

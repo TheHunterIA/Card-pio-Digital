@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useStore, OrderStatus as StatusType, Order } from '../../store';
 import { updateOrderStatus, confirmPayment } from '../../lib/database';
-import { Clock, ChefHat, Motorbike, Check, AlertCircle, Package, MessageCircle, Info, History, X, Phone, Receipt, Printer } from 'lucide-react';
+import { Clock, ChefHat, Motorbike, Check, AlertCircle, Package, MessageCircle, Info, History, X, Phone, Receipt, Printer, UtensilsCrossed } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -123,8 +123,12 @@ export default function KDS() {
                             <span className="font-display font-black text-ink text-lg tracking-tight leading-none">
                               {order.customerName || 'Cliente'}
                             </span>
-                            <span className="text-[10px] font-display font-bold text-ink-muted uppercase tracking-widest mt-1">
-                              {order.type === 'dine-in' ? `Mesa ${order.tableNumber || '-'}` : `#${order.id.substring(0,6)}`}
+                            <span className="text-[10px] font-display font-bold uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                              {order.type === 'dine-in' ? (
+                                <span className="bg-brand/10 text-brand px-2 py-0.5 rounded flex items-center gap-1"><UtensilsCrossed className="w-3 h-3"/> Mesa {order.tableNumber || '-'}</span>
+                              ) : (
+                                <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded flex items-center gap-1"><Motorbike className="w-3 h-3"/> Delivery #{order.id.substring(0,4)}</span>
+                              )}
                               {order.waiterName && <span className="ml-2 text-brand">• Atend.: {order.waiterName}</span>}
                             </span>
                             {order.billRequested && order.paymentStatus !== 'paid' && (

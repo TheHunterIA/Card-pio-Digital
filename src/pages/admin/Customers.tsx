@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../../store';
-import { Search, Phone, Calendar, ShoppingBag, TrendingUp, UserCheck, UserMinus, UserPlus, Filter, Eye, X, ArrowRight } from 'lucide-react';
+import { Search, Phone, Calendar, ShoppingBag, TrendingUp, UserCheck, UserMinus, UserPlus, Filter, Eye, X, ArrowRight, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,6 +13,7 @@ interface CustomerStats {
   lastOrderDate: Date;
   favoriteItem: string;
   status: 'fiel' | 'ativo' | 'sumido';
+  avgRating: number | null;
   allOrders: any[];
 }
 
@@ -44,16 +45,24 @@ export default function Customers() {
       const lastDate = parseISO(lastOrder.createdAt);
       const daysSince = differenceInDays(new Date(), lastDate);
       
-      // Calculate favorite item
+      // Calculate favorite item and ratings
       const itemCounts: Record<string, number> = {};
+      let totalRating = 0;
+      let ratingCount = 0;
+      
       data.orders.forEach(o => {
-        o.items.forEach(i => {
+        if (o.rating && typeof o.rating === 'number' && o.rating > 0) {
+           totalRating += o.rating;
+           ratingCount++;
+        }
+        o.items.forEach((i: any) => {
           itemCounts[i.item.name] = (itemCounts[i.item.name] || 0) + i.quantity;
         });
       });
       
       const favoriteItem = Object.entries(itemCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
       const orderCount = data.orders.length;
+      const avgRating = ratingCount > 0 ? totalRating / ratingCount : null;
 
       let status: CustomerStats['status'] = 'ativo';
       if (orderCount >= 5 && daysSince < 15) status = 'fiel';
@@ -67,6 +76,7 @@ export default function Customers() {
         lastOrderDate: lastDate,
         favoriteItem,
         status,
+        avgRating,
         allOrders: sortedOrders
       };
     }).sort((a, b) => b.orderCount - a.orderCount);
@@ -163,6 +173,7 @@ export default function Customers() {
               <tr>
                 <th className="text-left px-8 py-5">Cliente</th>
                 <th className="text-left px-8 py-5">Frequência</th>
+                <th className="text-left px-8 py-5">Avaliação</th>
                 <th className="text-left px-8 py-5">Preferência</th>
                 <th className="text-left px-8 py-5">Último Pedido</th>
                 <th className="text-right px-8 py-5">Status</th>
@@ -192,6 +203,16 @@ export default function Customers() {
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(c.totalSpent)} total
                       </span>
                     </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    {c.avgRating ? (
+                      <div className="flex items-center gap-1.5 text-brand bg-brand/5 px-2 py-1 rounded-lg w-fit">
+                        <Star className="w-3.5 h-3.5 fill-brand" />
+                        <span className="font-display font-black text-xs">{c.avgRating.toFixed(1)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-display font-bold text-ink-muted uppercase tracking-widest bg-oat px-2 py-1 rounded-lg">S/ Avaliação</span>
+                    )}
                   </td>
                   <td className="px-8 py-6 text-sm text-ink-muted font-medium italic">
                     <div className="flex items-center gap-2">
@@ -354,7 +375,14 @@ export default function Customers() {
                           <p className="text-xs font-display font-bold text-ink-muted uppercase tracking-widest">
                             {format(parseISO(order.createdAt), "dd 'de' MMMM", { locale: ptBR })}
                           </p>
-                          <p className="text-[10px] text-ink-muted/60 font-medium font-mono uppercase">#{order.id}</p>
+                          <div className="flex items-center gap-2">
+                             <p className="text-[10px] text-ink-muted/60 font-medium font-mono uppercase">#{order.id}</p>
+                             {order.rating && (
+                               <div className="flex items-center gap-0.5 text-brand bg-brand/5 px-1.5 py-0.5 rounded text-[8px] font-black">
+                                 <Star className="w-2.5 h-2.5 fill-brand" /> {order.rating}
+                               </div>
+                             )}
+                          </div>
                         </div>
                       </div>
                       <p className="font-display font-bold text-ink">
