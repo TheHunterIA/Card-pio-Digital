@@ -1,11 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { useStore, initialMenu, MenuItem, MenuItemExtra } from '../../store';
 import { addMenuItem, toggleMenuItem, updateMenuPrice, deleteMenuItem, updateMenuItem } from '../../lib/database';
-import { PlusCircle, Image as ImageIcon, Check, ListPlus, Trash2, X, Copy, Pencil, Plus, Upload, Camera } from 'lucide-react';
+import { PlusCircle, Image as ImageIcon, Check, ListPlus, Trash2, X, Copy, Pencil, Plus, Upload, Camera, FileSpreadsheet, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '../../lib/AuthProvider';
+import * as XLSX from 'xlsx';
 
 export default function MenuSettings() {
   const menu = useStore(state => state.menu);
+  const { isMasterAdmin } = useAuth();
   
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -23,6 +26,83 @@ export default function MenuSettings() {
 
   const [newExtra, setNewExtra] = useState({ name: '', price: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const excelInputRef = useRef<HTMLInputElement>(null);
+
+  const downloadTemplate = () => {
+    const ws = XLSX.utils.json_to_sheet([
+      {
+        "Nome do Produto": "Cheeseburger Duplo",
+        "Descriçao": "Pão brioche, duas carnes de 100g, muito queijo e molho especial.",
+        "Preço": 35.90,
+        "Categoria": "Lanches",
+        "URL da Imagem (Opcional)": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=800&h=600",
+        "Extra 1: Nome": "Bacon Extra",
+        "Extra 1: Preço": 5.00,
+        "Extra 2: Nome": "Batata Frita",
+        "Extra 2: Preço": 8.50,
+        "Extra 3: Nome": "",
+        "Extra 3: Preço": ""
+      }
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cardapio");
+    XLSX.writeFile(wb, "Modelo_Cardapio_Urban_Prime.xlsx");
+  };
+
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json<any>(worksheet);
+
+        let successCount = 0;
+        for (const row of json) {
+          if (!row["Nome do Produto"] || !row["Preço"]) continue;
+
+          const extras: MenuItemExtra[] = [];
+          for (let i = 1; i <= 3; i++) {
+            const extraName = row[`Extra ${i}: Nome`];
+            // eslint-disable-next-line
+            const extraPrice = parseFloat(row[`Extra ${i}: Preço`]);
+            if (extraName && !isNaN(extraPrice)) {
+              extras.push({
+                id: Math.random().toString(36).substr(2, 9),
+                name: extraName,
+                price: extraPrice
+              });
+            }
+          }
+
+          const defaultImage = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800&h=600';
+
+          await addMenuItem({
+            name: String(row["Nome do Produto"]),
+            description: row["Descriçao"] ? String(row["Descriçao"]) : "",
+            price: parseFloat(row["Preço"]),
+            category: row["Categoria"] ? String(row["Categoria"]) : "Lanches",
+            image: row["URL da Imagem (Opcional)"] ? String(row["URL da Imagem (Opcional)"]) : defaultImage,
+            extras: extras
+          });
+          successCount++;
+        }
+        
+        alert(`${successCount} itens importados com sucesso!`);
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao processar arquivo Excel. Certifique-se de usar o modelo correto.');
+      } finally {
+        if (excelInputRef.current) excelInputRef.current.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -160,15 +240,44 @@ export default function MenuSettings() {
           <h2 className="text-3xl font-display font-bold text-ink mb-1 tracking-tight">Estoque & Menu</h2>
           <p className="text-ink-muted text-sm font-medium">Gerencie a disponibilidade e realize alterações de preço instantâneas.</p>
         </div>
-        <button 
-          onClick={() => {
-            if (isAddingMode) handleCloseForm();
-            else setIsAddingMode(true);
-          }}
-          className="flex items-center gap-2 bg-brand text-white px-6 py-3.5 rounded-full font-display font-bold text-sm transition-all w-full sm:w-auto justify-center shadow-md active:scale-95 tracking-wide"
-        >
-          {isAddingMode ? <><X className="w-5 h-5"/> Cancelar</> : <><PlusCircle className="w-5 h-5" /> Novo Lanche</>}
-        </button>
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+          {isMasterAdmin && (
+            <>
+              <button 
+                onClick={downloadTemplate}
+                className="flex items-center gap-2 bg-white text-ink border border-black/10 px-4 py-3.5 rounded-full font-display font-bold text-sm transition-all hover:bg-oat shadow-sm active:scale-95 tracking-wide"
+                title="Baixar Modelo de Excel"
+              >
+                <Download className="w-5 h-5"/> Modelo
+              </button>
+              
+              <input 
+                type="file"
+                accept=".xlsx, .xls"
+                className="hidden"
+                ref={excelInputRef}
+                onChange={handleExcelUpload}
+              />
+              <button 
+                onClick={() => excelInputRef.current?.click()}
+                className="flex items-center gap-2 bg-[#107c41] text-white px-4 py-3.5 rounded-full font-display font-bold text-sm transition-all hover:bg-[#0c6130] shadow-sm active:scale-95 tracking-wide"
+                title="Importar Cardápio de um arquivo Excel"
+              >
+                <FileSpreadsheet className="w-5 h-5"/> Importar Excel
+              </button>
+            </>
+          )}
+
+          <button 
+            onClick={() => {
+              if (isAddingMode) handleCloseForm();
+              else setIsAddingMode(true);
+            }}
+            className="flex items-center gap-2 bg-brand text-white px-6 py-3.5 rounded-full font-display font-bold text-sm transition-all w-full sm:w-auto justify-center shadow-md active:scale-95 tracking-wide"
+          >
+            {isAddingMode ? <><X className="w-5 h-5"/> Cancelar</> : <><PlusCircle className="w-5 h-5" /> Novo Lanche</>}
+          </button>
+        </div>
       </div>
 
       {menu.length === 0 && (

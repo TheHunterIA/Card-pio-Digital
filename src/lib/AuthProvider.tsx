@@ -12,6 +12,7 @@ interface AuthContextType {
   isDriver: boolean;
   isWaiter: boolean;
   isPorteiro: boolean;
+  isMasterAdmin: boolean;
   loading: boolean;
   signInAsAdmin: () => Promise<void>;
   logout: () => Promise<void>;
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isDriver, setIsDriver] = useState(false);
   const [isWaiter, setIsWaiter] = useState(false);
   const [isPorteiro, setIsPorteiro] = useState(false);
+  const [isMasterAdmin, setIsMasterAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,6 +63,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (!isAdm && currentUser.email) {
               const safeEmail = currentUser.email.toLowerCase().trim();
               try {
+                // Checa admin autorizado pelo e-mail
+                const authAdminDoc = await getDocFromServer(doc(db, 'authorized_admins', safeEmail));
+                if (authAdminDoc.exists()) {
+                  isAdm = true;
+                }
+              } catch (err) {
+                 console.error("Error reading authorized_admins:", err);
+              }
+
+              try {
                 // Checa motorista
                 const driverDoc = await getDocFromServer(doc(db, 'authorized_drivers', safeEmail));
                 isDr = driverDoc.exists();
@@ -93,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsDriver(isDr);
           setIsWaiter(isWt);
           setIsPorteiro(isPt);
+          setIsMasterAdmin(isMasterAdmin);
           
           if ((isAdm || isDr || isWt || isPt) && !unsubOrders) {
             unsubOrders = subscribeToOrders();
@@ -111,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsDriver(false);
         setIsWaiter(false);
         setIsPorteiro(false);
+        setIsMasterAdmin(false);
         useStore.getState().setOrders([]);
         
         try {
@@ -148,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, isDriver, isWaiter, isPorteiro, loading, signInAsAdmin, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, isDriver, isWaiter, isPorteiro, isMasterAdmin, loading, signInAsAdmin, logout }}>
       {!loading && children}
     </AuthContext.Provider>
   );

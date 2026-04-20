@@ -17,7 +17,10 @@ service cloud.firestore {
     }
     
     function isAdmin() { 
-      return isMasterAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))); 
+      return isMasterAdmin() || (isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        ((request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_admins/$(request.auth.token.email.lower())))
+      )); 
     }
     function isDriver() {
       return isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_drivers/$(request.auth.token.email.lower()));
@@ -130,6 +133,12 @@ service cloud.firestore {
     match /entregadores/{userId} {
       allow read: if isSignedIn();
       allow write: if isAdmin() || (isSignedIn() && userId == request.auth.uid && isValidDriver(incoming()));
+    }
+
+    // Authorized Admins Collection
+    match /authorized_admins/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isMasterAdmin();
     }
 
     // Authorized Drivers Collection (For Auth)

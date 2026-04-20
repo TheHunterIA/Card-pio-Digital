@@ -268,7 +268,6 @@ export default function Welcome() {
                 onScan={handleScan}
                 formats={['qr_code']}
                 components={{
-                  audio: false,
                   torch: true,
                   finder: false,
                 }}
