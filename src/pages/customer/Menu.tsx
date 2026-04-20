@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { subscribeToSession } from '../../lib/database';
+import { subscribeToMenu } from '../../lib/database';
 
 export default function Menu() {
   const navigate = useNavigate();
@@ -16,6 +17,12 @@ export default function Menu() {
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [geoError, setGeoError] = useState<string | null>(null);
   const [sessionLock, setSessionLock] = useState<string | null>(null);
+
+  // Subscribe to menu
+  useEffect(() => {
+    const unsub = subscribeToMenu();
+    return () => unsub();
+  }, []);
 
   // Sync session based on URL or existing session
   useEffect(() => {
