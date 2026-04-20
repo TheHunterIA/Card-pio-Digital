@@ -4,7 +4,7 @@ import { onAuthStateChanged, signInAnonymously, User, signInWithPopup, GoogleAut
 import { doc, getDocFromServer, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useStore } from '../store';
 
-import { subscribeToMenu, subscribeToOrders } from './database';
+import { subscribeToOrders } from './database';
 
 interface AuthContextType {
   user: User | null;
@@ -29,21 +29,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Start data subscriptions
-    const unsubMenu = subscribeToMenu();
     let unsubOrders: (() => void) | undefined;
 
-    async function testConnection() {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
-        }
-      }
-    }
-    testConnection();
-
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log("AuthProvider: onAuthStateChanged", currentUser?.email);
+
       // Clear previous global orders listener if permissions are changing
       if (unsubOrders) {
         unsubOrders();
@@ -98,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
           
+          console.log("AuthProvider: Permissions - Admin:", isAdm, "Driver:", isDr, "Waiter:", isWt, "Porter:", isPt);
           setIsAdmin(isAdm);
           setIsDriver(isDr);
           setIsWaiter(isWt);
@@ -107,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             unsubOrders = subscribeToOrders();
           }
         } catch (e) {
+          console.error("AuthProvider: Error checking permissions", e);
           setIsAdmin(false);
           setIsDriver(false);
           setIsWaiter(false);
@@ -138,7 +130,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       unsubscribe();
-      unsubMenu();
       if (unsubOrders) unsubOrders();
     };
   }, []);
