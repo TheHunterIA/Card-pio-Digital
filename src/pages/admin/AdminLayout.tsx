@@ -12,8 +12,18 @@ export default function AdminLayout() {
     return <div className="min-h-screen bg-oat flex items-center justify-center font-display font-bold text-ink-muted">Carregando painel...</div>;
   }
 
-  if (!user || !isAdmin) {
+  if (!user) {
     return <Navigate to="/admin/login" replace />;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-oat flex flex-col items-center justify-center p-6 text-center">
+        <h2 className="text-2xl font-display font-black text-ink mb-2">Acesso Restrito</h2>
+        <p className="text-ink-muted mb-6">Você não possui permissões de administrador.</p>
+        <button onClick={logout} className="bg-brand text-white px-6 py-3 rounded-xl font-bold">Sair</button>
+      </div>
+    );
   }
 
   return (
