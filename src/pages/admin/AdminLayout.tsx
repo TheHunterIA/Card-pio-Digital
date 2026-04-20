@@ -1,12 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, Navigate } from 'react-router-dom';
 import { LayoutDashboard, Settings, LogOut, UtensilsCrossed, Truck, Map, Users, QrCode, BookOpen, Menu, X, Contact, BarChart3, User, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../lib/AuthProvider';
+import { subscribeToMenu } from '../../lib/database';
 
 export default function AdminLayout() {
   const { user, isAdmin, loading, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    // Only subscribe if admin is loaded and logged in
+    if (!loading && isAdmin) {
+      const unsub = subscribeToMenu();
+      return () => unsub();
+    }
+  }, [loading, isAdmin]);
 
   if (loading) {
     return <div className="min-h-screen bg-oat flex items-center justify-center font-display font-bold text-ink-muted">Carregando painel...</div>;
