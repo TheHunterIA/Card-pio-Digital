@@ -40,7 +40,7 @@ service cloud.firestore {
           && data.description is string && data.description.size() <= 500
           && data.price is number && data.price >= 0
           && data.category is string && data.category.size() > 0 && data.category.size() <= 50
-          && data.image is string && data.image.size() <= 1024
+          && data.image is string && data.image.size() <= 1048576
           && data.isActive is bool
           && data.extras is list;
     }
