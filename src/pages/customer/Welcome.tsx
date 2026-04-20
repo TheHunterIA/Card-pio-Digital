@@ -255,34 +255,6 @@ export default function Welcome() {
           >
             Meus Pedidos
           </button>
-          <span className="text-black/10">|</span>
-          <button 
-            onClick={() => navigate('/admin')}
-            className="text-[10px] uppercase tracking-widest font-display font-bold text-ink-muted hover:text-ink transition-colors"
-          >
-            Acesso Lojista
-          </button>
-          <span className="text-black/10">|</span>
-          <button 
-            onClick={() => navigate('/entregador/login')}
-            className="text-[10px] uppercase tracking-widest font-display font-bold text-ink-muted hover:text-ink transition-colors"
-          >
-            Acesso Entregador
-          </button>
-          <span className="text-black/10">|</span>
-          <button 
-            onClick={() => navigate('/garcom/login')}
-            className="text-[10px] uppercase tracking-widest font-display font-bold text-ink-muted hover:text-ink transition-colors"
-          >
-            Acesso Garçom
-          </button>
-          <span className="text-black/10">|</span>
-          <button 
-            onClick={() => navigate('/portaria/login')}
-            className="text-[10px] uppercase tracking-widest font-display font-bold text-ink-muted hover:text-ink transition-colors"
-          >
-            Acesso Portaria
-          </button>
         </div>
       </div>
 
