@@ -5,6 +5,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useStore, Order } from '../../store';
 import { motion, AnimatePresence } from 'motion/react';
+import { subscribeToMenu } from '../../lib/database';
 
 export default function CustomerLayout() {
   const location = useLocation();
@@ -12,6 +13,12 @@ export default function CustomerLayout() {
   const { cart, currentOrderId } = useStore();
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
   
+  // Subscribe to menu
+  useEffect(() => {
+    const unsub = subscribeToMenu();
+    return () => unsub();
+  }, []);
+
   const isHome = location.pathname === '/';
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
