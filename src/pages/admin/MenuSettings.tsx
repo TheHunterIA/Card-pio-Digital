@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useStore, initialMenu, MenuItem, MenuItemExtra } from '../../store';
 import { addMenuItem, toggleMenuItem, updateMenuPrice, deleteMenuItem, updateMenuItem } from '../../lib/database';
-import { PlusCircle, Image as ImageIcon, Check, ListPlus, Trash2, X, Copy, Pencil, Plus } from 'lucide-react';
+import { PlusCircle, Image as ImageIcon, Check, ListPlus, Trash2, X, Copy, Pencil, Plus, Upload, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function MenuSettings() {
@@ -22,6 +22,52 @@ export default function MenuSettings() {
   });
 
   const [newExtra, setNewExtra] = useState({ name: '', price: 0 });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecione uma imagem válida.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        // Comprime como JPEG com 70% de qualidade para reduzir espaço do Base64
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        setFormItem({ ...formItem, image: dataUrl });
+      };
+    };
+  };
 
   const handleCreateProduct = () => {
     if (!formItem.name || formItem.price <= 0) return;
@@ -210,14 +256,35 @@ export default function MenuSettings() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-display font-bold text-ink-muted mb-1.5 uppercase tracking-widest">Imagem URL</label>
+                      <label className="block text-[10px] font-display font-bold text-ink-muted mb-1.5 uppercase tracking-widest">Imagem do Produto</label>
                       <input 
-                        type="text" 
-                        value={formItem.image}
-                        onChange={(e) => setFormItem({...formItem, image: e.target.value})}
-                        placeholder="https://..."
-                        className="w-full bg-oat border-2 border-transparent rounded-xl p-3 text-sm focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 focus:bg-white font-medium transition-all"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
                       />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex-1 bg-oat border-2 border-dashed border-black/10 hover:border-brand hover:bg-brand/5 text-ink-muted hover:text-brand rounded-xl p-3 text-sm font-medium transition-all flex items-center justify-center gap-2"
+                        >
+                          <Camera className="w-4 h-4" />
+                          {formItem.image ? 'Alterar Imagem' : 'Enviar Foto do Lanche'}
+                        </button>
+                      </div>
+                      {formItem.image && (
+                        <div className="mt-2 relative w-20 h-20 rounded-xl overflow-hidden border-2 border-brand shadow-sm">
+                          <img src={formItem.image} alt="Preview" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => setFormItem({...formItem, image: ''})}
+                            className="absolute top-1 right-1 bg-black/50 hover:bg-red-500 text-white rounded-full p-1 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
