@@ -1,0 +1,97 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitives
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { 
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); 
+    }
+    function isValidId(id) { 
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // Validation Blueprint for MenuItem
+    function isValidMenuItem(data) {
+      return data.keys().hasAll(['name', 'description', 'price', 'category', 'image', 'isActive'])
+          && data.keys().size() == 6
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.description is string && data.description.size() <= 500
+          && data.price is number && data.price >= 0
+          && data.category is string && data.category.size() > 0 && data.category.size() <= 50
+          && data.image is string && data.image.size() <= 1024
+          && data.isActive is bool;
+    }
+    
+    // Validation Blueprint for Order
+    function isValidOrder(data) {
+      return data.keys().hasAll(['customerName', 'type', 'items', 'total', 'status', 'paymentStatus', 'createdAt'])
+          // optional fields can make size 7 to 9
+          && data.keys().size() >= 7 && data.keys().size() <= 9
+          && data.customerName is string && data.customerName.size() <= 100
+          && data.type in ['dine-in', 'delivery']
+          && (!('tableNumber' in data) || (data.tableNumber is string && data.tableNumber.size() <= 20))
+          && (!('address' in data) || (data.address is string && data.address.size() <= 500))
+          && data.items is list && data.items.size() > 0 && data.items.size() <= 30
+          // Cannot strictly map/iterate array elements, but we ensure it's a list.
+          && data.total is number && data.total >= 0
+          && data.status in ['na-fila', 'preparando', 'saiu-entrega', 'finalizado', 'cancelado']
+          && (!('paymentMethod' in data) || data.paymentMethod in ['pix', 'na-entrega'])
+          && data.paymentStatus in ['pending', 'paid']
+          && data.createdAt == request.time;
+    }
+
+    // Admins Collection
+    match /admins/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      // Admins are populated manually or via Admin SDK
+      allow write: if false; 
+    }
+
+    // Menu Collection
+    match /menu/{menuId} {
+      // Anyone can read the menu (even anonymous)
+      allow read: if true;
+      allow create: if isAdmin() 
+                    && isValidId(menuId) 
+                    && isValidMenuItem(incoming());
+      allow update: if isAdmin() 
+                    && isValidId(menuId) 
+                    && isValidMenuItem(incoming())
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'category', 'image', 'isActive']);
+      allow delete: if isAdmin() && isValidId(menuId);
+    }
+
+    // Orders Collection
+    match /orders/{orderId} {
+      // Admins can list all orders. Customers (anonymous) can only create them, typically they might listen to a specific order ID if we allow get.
+      allow list: if isAdmin();
+      // Allow reading specific order if authenticated (maybe auth.uid in order? Not set up. For now, only admin can read, or if anonymous, maybe we should attach userId to order).
+      // Since the app just shows order ID and users do not sign in before ordering in the current flow, we will enforce userId.
+      allow get: if isValidId(orderId) && (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid));
+
+      allow create: if isSignedIn()
+                    && isValidId(orderId)
+                    && isValidOrder(incoming())
+                    && incoming().keys().hasAll(['userId']) 
+                    && incoming().userId == request.auth.uid; // Identity validation
+
+      // Only admins can update order status/payment
+      allow update: if isAdmin()
+                    && isValidId(orderId)
+                    // Action: Admin updates status or payment
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paymentStatus'])
+                    && incoming().createdAt == existing().createdAt
+                    && incoming().userId == existing().userId;
+      
+      allow delete: if false;
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "Urban Prime Grill",
+  "description": "Urban Prime Grill - Cardápio Digital Premium, Sistema de Gestão (KDS), Área do Entregador e Área do Garçom.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ],
+  "majorCapabilities": []
+}

@@ -1,0 +1,605 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useStore, PaymentMethod } from '../../store';
+import { placeOrder } from '../../lib/database';
+import { doc, getDoc, query, collection, where, getDocs, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from '../../lib/firebase';
+import { QrCode, Banknote, MapPin, Store, X, CreditCard, Smartphone, Check, Percent } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import IdentifyModal from '../../components/IdentifyModal';
+import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+
+export default function Checkout() {
+  const navigate = useNavigate();
+  const orderType = useStore(state => state.orderType);
+  const setOrderType = useStore(state => state.setOrderType);
+  const cart = useStore(state => state.cart);
+  const address = useStore(state => state.address);
+  const setAddress = useStore(state => state.setAddress);
+  const addressNumber = useStore(state => state.addressNumber);
+  const setAddressNumber = useStore(state => state.setAddressNumber);
+  const addressComplement = useStore(state => state.addressComplement);
+  const setAddressComplement = useStore(state => state.setAddressComplement);
+  const cep = useStore(state => state.cep);
+  const setCep = useStore(state => state.setCep);
+  const setCustomerLocation = useStore(state => state.setCustomerLocation);
+  const customerLocation = useStore(state => state.customerLocation);
+  const tableNumber = useStore(state => state.tableNumber);
+  const setTableNumber = useStore(state => state.setTableNumber);
+  const customerName = useStore(state => state.customerName);
+  const whatsapp = useStore(state => state.whatsapp);
+  const requireUpfrontPayment = useStore(state => state.requireUpfrontPayment);
+  const couponCode = useStore(state => state.couponCode);
+  const setCouponCode = useStore(state => state.setCouponCode);
+  const couponDiscount = useStore(state => state.couponDiscount);
+  const setCouponDiscount = useStore(state => state.setCouponDiscount);
+
+  // @ts-ignore
+  const googleMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
+
+  const [isLocating, setIsLocating] = useState(false);
+  const [isFetchingCep, setIsFetchingCep] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(requireUpfrontPayment ? 'pix' : null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showIdentify, setShowIdentify] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+
+  const applyCoupon = async () => {
+    const code = useStore.getState().couponCode;
+    if (!code) return;
+
+    if (!auth.currentUser) {
+      alert("Você precisa estar logado para usar cupons.");
+      return;
+    }
+
+    setIsApplyingCoupon(true);
+    try {
+      const docSnap = await getDoc(doc(db, 'settings', 'config'));
+      if (docSnap.exists()) {
+        const config = docSnap.data();
+        const couponData = config.coupons?.[code];
+        
+        if (!couponData) {
+          alert("Cupom inválido!");
+          setIsApplyingCoupon(false);
+          return;
+        }
+
+        const { discount, limitPerUser } = couponData;
+
+        // Check usage
+        const usageQuery = query(
+          collection(db, 'couponUsage'),
+          where('uid', '==', auth.currentUser.uid),
+          where('code', '==', code)
+        );
+        const usageSnap = await getDocs(usageQuery);
+        let currentUsage = 0;
+        if (!usageSnap.empty) {
+          currentUsage = usageSnap.docs[0].data().count;
+        }
+
+        if (currentUsage >= limitPerUser) {
+          alert(`Você já atingiu o limite de uso deste cupom (${limitPerUser}x).`);
+          setIsApplyingCoupon(false);
+          return;
+        }
+
+        useStore.getState().setCouponDiscount(discount);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao aplicar o cupom.");
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    useStore.getState().setCouponCode('');
+    useStore.getState().setCouponDiscount(0);
+  };
+
+  useEffect(() => {
+    if (isScanning) {
+      const scanner = new Html5QrcodeScanner(
+        "checkout-reader",
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        false
+      );
+
+      scanner.render((decodedText) => {
+        scanner.clear();
+        setIsScanning(false);
+        try {
+          if (decodedText.startsWith("http")) {
+            const url = new URL(decodedText);
+            const mesa = url.searchParams.get("mesa");
+            if (mesa) {
+              setTableNumber(mesa);
+              setOrderType('dine-in');
+            } else {
+              setTableNumber(decodedText);
+              setOrderType('dine-in');
+            }
+          } else {
+            setTableNumber(decodedText);
+            setOrderType('dine-in');
+          }
+        } catch (e) {
+          setTableNumber(decodedText);
+          setOrderType('dine-in');
+        }
+      }, (err) => {});
+
+      return () => {
+        scanner.clear().catch(e => console.error(e));
+      };
+    }
+  }, [isScanning, setTableNumber, setOrderType]);
+
+  const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '').substring(0, 8);
+    setCep(value);
+
+    if (value.length === 8) {
+      setIsFetchingCep(true);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${value}/json/`);
+        const data = await response.json();
+        
+        if (!data.erro) {
+          // Format: Rua, Bairro, Cidade - UF
+          const formattedAddress = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`;
+          setAddress(formattedAddress);
+          
+          if (googleMapsKey) {
+            try {
+              const results = await geocodeByAddress(formattedAddress);
+              const latLng = await getLatLng(results[0]);
+              setCustomerLocation(latLng);
+            } catch (e) {
+              console.error("Geocoding failed", e);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("CEP lookup failed", err);
+      } finally {
+        setIsFetchingCep(false);
+      }
+    }
+  };
+
+  const total = cart.reduce((sum, item) => {
+    const extrasPrice = (item.selectedExtras || []).reduce((acc, e) => acc + e.price, 0);
+    return sum + ((item.item.price + extrasPrice) * item.quantity);
+  }, 0);
+  const discountAmount = total * (couponDiscount / 100);
+  const finalTotal = total - discountAmount;
+
+  const handleGetLocation = () => {
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setIsLocating(false);
+      },
+      (err) => {
+        console.error(err);
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const handleFinish = async () => {
+    if (!paymentMethod) return;
+    if (orderType === 'delivery' && (!address.trim() || !addressNumber.trim())) return;
+
+    // Check identification
+    if (!customerName || !whatsapp) {
+      setShowIdentify(true);
+      return;
+    }
+
+    setIsProcessing(true);
+    await placeOrder(paymentMethod);
+    navigate('/status', { replace: true });
+  };
+
+  return (
+    <div className="bg-oat min-h-[calc(100vh-5rem)] flex flex-col pt-6 pb-40">
+      <div className="px-5 flex-1 space-y-8 max-w-2xl mx-auto w-full">
+        
+        <h2 className="text-3xl font-display font-bold text-ink mb-2 tracking-tight">Quase lá!</h2>
+
+        {/* Info Block */}
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-2xl ${orderType === 'dine-in' ? 'bg-brand/10 text-brand' : 'bg-brand/10 text-brand'}`}>
+                {orderType === 'dine-in' ? <Store className="w-6 h-6" strokeWidth={2.5} /> : <MapPin className="w-6 h-6" strokeWidth={2.5} />}
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-ink text-lg leading-tight">
+                  {orderType === 'dine-in' ? 'Consumo no Local' : 'Delivery'}
+                </h2>
+                <p className="text-ink-muted text-sm font-medium">
+                  {customerName}
+                  {orderType === 'dine-in' && tableNumber && ` • Mesa ${tableNumber}`}
+                </p>
+              </div>
+            </div>
+            
+            {orderType === 'delivery' && (
+              <button 
+                onClick={() => setIsScanning(true)}
+                className="flex flex-col items-center gap-1 group"
+              >
+                <div className="w-10 h-10 bg-oat rounded-xl flex items-center justify-center border border-black/5 group-active:scale-95 transition-all">
+                  <QrCode className="w-5 h-5 text-ink-muted group-hover:text-brand transition-colors" />
+                </div>
+                <span className="text-[9px] font-bold text-ink-muted uppercase tracking-tighter">Mesa?</span>
+              </button>
+            )}
+          </div>
+
+          {orderType === 'delivery' && (
+            <div className="mt-5 pt-5 border-t border-black/5 space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider">Endereço de Entrega</label>
+                <button 
+                  onClick={handleGetLocation}
+                  disabled={isLocating}
+                  className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full transition-all ${customerLocation ? 'bg-emerald-100 text-emerald-700' : 'bg-brand/10 text-brand'}`}
+                >
+                  {isLocating ? (
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-3 h-3 border border-brand/20 border-t-brand rounded-full" />
+                  ) : (
+                    <MapPin className="w-3 h-3" />
+                  )}
+                  {customerLocation ? 'Localização Ativada' : 'Usar Localização Atual'}
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="relative">
+                  <input 
+                    type="text"
+                    value={cep}
+                    onChange={handleCepChange}
+                    maxLength={8}
+                    placeholder="CEP (Somente números)"
+                    className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                  />
+                  {isFetchingCep && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                      <motion.div 
+                        animate={{ rotate: 360 }} 
+                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                        className="w-4 h-4 border-2 border-brand/20 border-t-brand rounded-full"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {googleMapsKey ? (
+                  <div className="relative z-50">
+                    <GooglePlacesAutocomplete
+                      apiKey={googleMapsKey}
+                      selectProps={{
+                        value: address ? { label: address, value: address } : null,
+                        onChange: async (val: any) => {
+                          if (val) {
+                            setAddress(val.label);
+                            const results = await geocodeByAddress(val.label);
+                            const latLng = await getLatLng(results[0]);
+                            setCustomerLocation(latLng);
+                          }
+                        },
+                        placeholder: "Buscar endereço...",
+                        styles: {
+                          control: (provided) => ({
+                            ...provided,
+                            backgroundColor: '#F5F2ED',
+                            border: '2px solid transparent',
+                            borderRadius: '1rem',
+                            padding: '0.25rem',
+                            boxShadow: 'none',
+                            '&:hover': { border: '2px solid #FF4E00' }
+                          }),
+                          input: (provided) => ({ ...provided, fontFamily: 'Inter', fontWeight: '500' }),
+                          placeholder: (provided) => ({ ...provided, color: '#8E9299', fontSize: '14px' }),
+                          option: (provided, state) => ({
+                            ...provided,
+                            backgroundColor: state.isFocused ? '#FF4E00' : 'white',
+                            color: state.isFocused ? 'white' : '#1C1917',
+                            fontFamily: 'Inter',
+                            fontSize: '14px'
+                          })
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <input 
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Nome da Rua / Logradouro"
+                    className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                  />
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <input 
+                    type="text"
+                    value={addressNumber}
+                    onChange={(e) => setAddressNumber(e.target.value)}
+                    placeholder="Número"
+                    className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                  />
+                  <input 
+                    type="text"
+                    value={addressComplement}
+                    onChange={(e) => setAddressComplement(e.target.value)}
+                    placeholder="Compl. (Opcional)"
+                    className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                  />
+                </div>
+              </div>
+
+              {customerLocation && (
+                <p className="mt-2 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  Garantimos que o entregador encontrará sua posição exata.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Discount Coupon */}
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-black/5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-brand/10 rounded-xl">
+              <Percent className="w-5 h-5 text-brand" strokeWidth={2.5} />
+            </div>
+            <h2 className="font-display font-bold text-ink text-lg tracking-tight">Cupom de Desconto</h2>
+          </div>
+          
+          <div className="flex gap-2">
+            <input 
+              placeholder="Digite o código..."
+              className="flex-1 bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand text-sm font-bold uppercase placeholder:font-normal transition-all"
+              value={couponCode}
+              onChange={e => setCouponCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
+            />
+            <button 
+              className="bg-ink text-white px-6 rounded-2xl font-display font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all shadow-md disabled:opacity-50"
+              onClick={applyCoupon}
+              disabled={isApplyingCoupon}
+            >
+              {isApplyingCoupon ? "..." : "Aplicar"}
+            </button>
+          </div>
+
+          {couponDiscount > 0 && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              className="mt-3 pt-3 border-t border-black/5 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2 text-emerald-600">
+                <Check className="w-4 h-4" strokeWidth={3} />
+                <span className="text-xs font-bold uppercase tracking-wider">Cupom Ativado!</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-display font-bold text-ink">-{couponDiscount}%</span>
+                <button 
+                  onClick={removeCoupon}
+                  className="text-[10px] font-black text-red-500 uppercase tracking-tighter"
+                >
+                  Remover
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Order Summary */}
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-black/5">
+          <h3 className="font-display font-bold text-ink text-lg mb-4">Resumo do Pedido</h3>
+          
+          <div className="space-y-4 mb-4">
+            {cart.map((item) => (
+              <div key={item.id} className="text-sm">
+                <div className="flex justify-between text-ink">
+                  <span className="font-medium">{item.quantity}x {item.item.name}</span>
+                  <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((item.item.price + (item.selectedExtras || []).reduce((acc, e) => acc + e.price, 0)) * item.quantity)}</span>
+                </div>
+                {item.selectedExtras && item.selectedExtras.length > 0 && (
+                  <p className="text-[10px] text-brand font-bold mt-0.5">
+                    + {item.selectedExtras.map(e => e.name).join(', ')}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3 pt-4 border-t border-black/5">
+            <div className="flex justify-between text-sm text-ink-muted">
+              <span>Subtotal</span>
+              <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}</span>
+            </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                <span>Desconto</span>
+                <span>-{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(discountAmount)}</span>
+              </div>
+            )}
+            <div className="pt-3 border-t border-black/5 flex justify-between items-center">
+              <span className="font-display font-bold text-ink">Total</span>
+              <span className="text-xl font-display font-black text-ink">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(finalTotal)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Methods */}
+        <div>
+          <h2 className="font-display font-bold text-ink mb-4 px-1 text-lg tracking-tight">Forma de Pagamento</h2>
+          <div className="space-y-4">
+            <button 
+              onClick={() => setPaymentMethod('pix')}
+              className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                paymentMethod === 'pix' 
+                ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
+                : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'pix' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
+                <QrCode className="w-6 h-6" strokeWidth={2.5} />
+              </div>
+              <div className="text-left flex-1">
+                <h3 className="font-display font-bold text-ink text-base">PIX</h3>
+                <p className="text-brand text-sm font-semibold tracking-wide">Aprovação imediata</p>
+              </div>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'pix' ? 'border-brand bg-white' : 'border-black/10'}`}>
+                {paymentMethod === 'pix' && <div className="w-3 h-3 bg-brand rounded-full" />}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setPaymentMethod('credit')}
+              className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                paymentMethod === 'credit' 
+                ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
+                : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'credit' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
+                <CreditCard className="w-6 h-6" strokeWidth={2.5} />
+              </div>
+              <div className="text-left flex-1">
+                <h3 className="font-display font-bold text-ink text-base">Cartão de Crédito</h3>
+                <p className="text-emerald-600 text-sm font-semibold tracking-wide">Digital (Simulação)</p>
+              </div>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'credit' ? 'border-brand bg-white' : 'border-black/10'}`}>
+                {paymentMethod === 'credit' && <div className="w-3 h-3 bg-brand rounded-full" />}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setPaymentMethod('debit')}
+              className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                paymentMethod === 'debit' 
+                ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
+                : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'debit' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
+                <Smartphone className="w-6 h-6" strokeWidth={2.5} />
+              </div>
+              <div className="text-left flex-1">
+                <h3 className="font-display font-bold text-ink text-base">Cartão de Débito</h3>
+                <p className="text-emerald-600 text-sm font-semibold tracking-wide">Digital (Simulação)</p>
+              </div>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'debit' ? 'border-brand bg-white' : 'border-black/10'}`}>
+                {paymentMethod === 'debit' && <div className="w-3 h-3 bg-brand rounded-full" />}
+              </div>
+            </button>
+
+            <button 
+              onClick={() => {
+                if (requireUpfrontPayment) return;
+                setPaymentMethod('na-entrega');
+              }}
+              disabled={requireUpfrontPayment}
+              className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                requireUpfrontPayment ? 'opacity-40 cursor-not-allowed bg-oat border-black/5' : 
+                paymentMethod === 'na-entrega' 
+                ? 'border-ink bg-ink text-white shadow-[0_8px_20px_-6px_rgba(28,25,23,0.3)]' 
+                : 'border-black/5 bg-white hover:border-black/10 text-ink shadow-sm'
+              }`}
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'na-entrega' ? 'bg-white/10 text-white' : 'bg-oat text-ink border border-black/5'}`}>
+                <Banknote className="w-6 h-6" strokeWidth={2.5} />
+              </div>
+              <div className="text-left flex-1">
+                <h3 className={`font-display font-bold text-base ${paymentMethod === 'na-entrega' ? 'text-white' : 'text-ink'}`}>
+                  {orderType === 'dine-in' ? 'Pagar no Caixa' : 'Pagar na Entrega'}
+                </h3>
+                <p className={`text-sm font-medium ${paymentMethod === 'na-entrega' ? 'text-white/70' : 'text-ink-muted'}`}>
+                  {requireUpfrontPayment ? 'Indisponível (Valid. Endereço)' : 'Cartão ou Dinheiro'}
+                </p>
+              </div>
+              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'na-entrega' ? 'border-white bg-transparent' : 'border-black/10'}`}>
+                {paymentMethod === 'na-entrega' && <div className="w-3 h-3 bg-white rounded-full" />}
+              </div>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <div className="fixed bottom-0 left-0 w-full p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,20px))] z-50 pointer-events-none">
+        <div className="max-w-xl mx-auto pointer-events-auto">
+          <button 
+            onClick={handleFinish}
+            disabled={!paymentMethod || (orderType === 'delivery' && (!address.trim() || !addressNumber.trim())) || isProcessing}
+            className="w-full h-14 bg-brand disabled:bg-gray-300 disabled:text-gray-500 text-white font-display font-bold rounded-full active:scale-95 transition-all text-base flex items-center justify-center shadow-[0_20px_40px_-15px_rgba(255,78,0,0.5)] disabled:shadow-none tracking-wide"
+          >
+            {isProcessing ? (
+              <motion.div 
+                animate={{ rotate: 360 }} 
+                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full"
+              />
+            ) : (
+              `Enviar Pedido • ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(finalTotal)}`
+            )}
+          </button>
+        </div>
+      </div>
+
+      <IdentifyModal 
+        isOpen={showIdentify} 
+        onClose={() => setShowIdentify(false)} 
+        onConfirm={handleFinish} 
+      />
+
+      {/* QR Code Scanner Modal */}
+      <AnimatePresence>
+        {isScanning && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center pt-24 px-4"
+          >
+            <button 
+              onClick={() => setIsScanning(false)}
+              className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <div className="text-center mb-8">
+              <h3 className="font-display font-bold text-white text-2xl tracking-tight mb-2">Escaneie o QR da Mesa</h3>
+              <p className="text-white/60 text-sm font-medium">Aponte para o código da mesa para mudar para Consumo Local.</p>
+            </div>
+            
+            <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden p-2">
+              <div id="checkout-reader" className="w-full" style={{ border: 'none' }}></div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

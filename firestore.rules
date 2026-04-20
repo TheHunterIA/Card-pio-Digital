@@ -1,0 +1,241 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitives
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isMasterAdmin() {
+      // Automatic dev environment master admin
+      return isSignedIn() && (request.auth.token.email is string) && request.auth.token.email == 'cleitonprado2026@gmail.com';
+    }
+    
+    function isAdmin() { 
+      return isMasterAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))); 
+    }
+    function isDriver() {
+      return isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_drivers/$(request.auth.token.email.lower()));
+    }
+    function isWaiter() {
+      return isMasterAdmin() || (isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_waiters/$(request.auth.token.email.lower())));
+    }
+    function isPorteiro() {
+      return isMasterAdmin() || (isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_porters/$(request.auth.token.email.lower())));
+    }
+    function isValidId(id) { 
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // Validation Blueprint for MenuItem
+    function isValidMenuItem(data) {
+      return data.keys().hasAll(['name', 'description', 'price', 'category', 'image', 'isActive', 'extras'])
+          && data.keys().size() == 7
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.description is string && data.description.size() <= 500
+          && data.price is number && data.price >= 0
+          && data.category is string && data.category.size() > 0 && data.category.size() <= 50
+          && data.image is string && data.image.size() <= 1024
+          && data.isActive is bool
+          && data.extras is list;
+    }
+    
+    // Validation Blueprint for Order
+    function isValidOrder(data) {
+      return data.keys().size() >= 1 && data.keys().size() <= 45
+          && (!('userId' in data) || (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128))
+          && (!('whatsapp' in data) || (data.whatsapp is string && (data.whatsapp.size() == 0 || (data.whatsapp.size() >= 8 && data.whatsapp.size() <= 20))))
+          && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 100))
+          && (!('type' in data) || (data.type in ['dine-in', 'delivery']))
+          && (!('tableNumber' in data) || (data.tableNumber is string && data.tableNumber.size() <= 20))
+          && (!('address' in data) || (data.address is string && data.address.size() <= 500))
+          && (!('addressNumber' in data) || (data.addressNumber is string && data.addressNumber.size() <= 20))
+          && (!('addressComplement' in data) || (data.addressComplement is string && data.addressComplement.size() <= 100))
+          && (!('items' in data) || (data.items is list && data.items.size() > 0 && data.items.size() <= 50))
+          && (!('total' in data) || (data.total is number && data.total >= 0))
+          && (!('status' in data) || (data.status in ['na-fila', 'preparando', 'saiu-entrega', 'finalizado', 'cancelado', 'pronto-entrega', 'em-rota', 'servido']))
+          && (!('paymentMethod' in data) || data.paymentMethod in ['pix', 'credit', 'debit', 'na-entrega'])
+          && (!('paymentStatus' in data) || data.paymentStatus in ['pending', 'paid'])
+          && (!('rating' in data) || (data.rating is number && data.rating >= 1 && data.rating <= 5))
+          && (!('billRequested' in data) || data.billRequested is bool)
+          && (!('createdAt' in data) || data.createdAt is timestamp)
+          && (!('updatedAt' in data) || data.updatedAt is timestamp)
+          && (!('deliveryCode' in data) || data.deliveryCode is string)
+          && (!('waiterName' in data) || (data.waiterName is string && data.waiterName.size() <= 100))
+          && (!('driverId' in data) || data.driverId is string)
+          && (!('driverName' in data) || data.driverName is string)
+          && (!('customerLocation' in data) || data.customerLocation is map)
+          && (!('driverLocation' in data) || data.driverLocation is map);
+    }
+
+    // Validation Blueprint for Client
+    function isValidClient(data) {
+      return data.keys().hasAll(['name', 'whatsapp', 'uid', 'lastSeen'])
+          && data.keys().size() == 4
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.whatsapp is string && data.whatsapp.size() >= 8 && data.whatsapp.size() <= 20
+          && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+          && data.lastSeen == request.time;
+    }
+
+    // Validation Blueprint for Driver
+    function isValidDriver(data) {
+      return data.keys().hasAll(['name', 'vehicle', 'status'])
+          && data.keys().size() >= 3 && data.keys().size() <= 4
+          && data.name is string && data.name.size() > 0
+          && data.vehicle is string
+          && data.status in ['disponível', 'em-entrega'];
+    }
+
+    // Validation Blueprint for StoreConfig
+    function isValidStoreConfig(data) {
+      return data.keys().size() >= 1 && data.keys().size() <= 20
+          && (!('cep' in data) || (data.cep is string))
+          && (!('address' in data) || (data.address is string))
+          && (!('number' in data) || (data.number is string))
+          && (!('lat' in data) || (data.lat is number))
+          && (!('lng' in data) || (data.lng is number))
+          && (!('pixFee' in data) || (data.pixFee is number))
+          && (!('creditFee' in data) || (data.creditFee is number))
+          && (!('debitFee' in data) || (data.debitFee is number))
+          && (!('deliveryFee' in data) || (data.deliveryFee is number))
+          && (!('geoEnabled' in data) || (data.geoEnabled is bool))
+          && (!('radiusMeters' in data) || (data.radiusMeters is number))
+          && (!('coupons' in data) || (data.coupons is map))
+          && (!('updatedAt' in data) || (data.updatedAt is string));
+    }
+
+    // Admins Collection
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isMasterAdmin(); 
+    }
+
+    // Clientes Collection
+    match /clientes/{whatsapp} {
+      // Admins see everything
+      allow read: if isAdmin();
+      // Clients see their own profile by whatsapp
+      allow get: if isSignedIn() && (existing().uid == request.auth.uid);
+      // Create/Update if uid matches auth
+      allow create, update: if isSignedIn() && incoming().uid == request.auth.uid && isValidClient(incoming());
+    }
+
+    // Entregadores Collection
+    match /entregadores/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || (isSignedIn() && userId == request.auth.uid && isValidDriver(incoming()));
+    }
+
+    // Authorized Drivers Collection (For Auth)
+    match /authorized_drivers/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Authorized Staff Collection
+    match /authorized_staff/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Authorized Waiters Collection (For Auth)
+    match /authorized_waiters/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Authorized Porters Collection (For Auth)
+    match /authorized_porters/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Settings Collection
+    match /settings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidStoreConfig(incoming());
+    }
+
+    // Menu Collection
+    match /menu/{menuId} {
+      allow read: if true;
+      allow create: if isAdmin() 
+                    && isValidId(menuId) 
+                    && isValidMenuItem(incoming());
+      
+      allow update: if isAdmin() 
+                    && isValidId(menuId) 
+                    && isValidMenuItem(incoming())
+                    && (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'category', 'image', 'isActive', 'extras']));
+                    
+      allow delete: if isAdmin() && isValidId(menuId);
+    }
+
+    // Orders Collection
+    match /orders/{orderId} {
+      // Admins, Waiters, Porters and Drivers can list all orders. 
+      // Customers can list their own orders.
+      allow list: if isAdmin() || isWaiter() || isPorteiro() || isDriver() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      
+      // Get by ID is allowed for status tracking if the client knows the specific orderId
+      allow get: if isValidId(orderId) && (isAdmin() || isWaiter() || isPorteiro() || isDriver() || (isSignedIn() && resource.data.userId == request.auth.uid));
+      
+      // Create by anyone with valid order data (schema-enforced)
+      allow create: if isValidId(orderId)
+                    && isValidOrder(incoming())
+                    && incoming().keys().hasAll(['userId', 'customerName', 'type', 'items', 'total', 'status', 'paymentStatus'])
+                    // If not a waiter/admin, whatsapp is mandatory (and must be non-empty)
+                    && (isWaiter() || isAdmin() || (incoming().keys().hasAll(['whatsapp']) && incoming().whatsapp.size() >= 8))
+                    // Security fix: Ensure user is signed in to create order, OR allow Admin/Waiter
+                    && (isAdmin() || isWaiter() || isSignedIn());
+
+      allow update: if isValidId(orderId) && isValidOrder(incoming())
+                    && (
+                      isAdmin() ||
+                      // Driver update: Accept or update location or complete
+                      (isDriver() && (
+                        // Accept delivery
+                        (existing().status == 'pronto-entrega' && incoming().status == 'em-rota' && incoming().driverId == request.auth.uid) ||
+                        // Update location
+                        (existing().status == 'em-rota' && existing().driverId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation'])) ||
+                        // Complete delivery
+                        (existing().status == 'em-rota' && existing().driverId == request.auth.uid && incoming().status == 'finalizado')
+                      )) ||
+                      // Customer update: Only 'finalizado'
+                      (isSignedIn() && existing().userId == request.auth.uid && 
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && 
+                       incoming().status == 'finalizado') ||
+                      // Customer update for anonymous users (based on deviceId/userId match)
+                      (isSignedIn() && existing().userId == incoming().userId && 
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && 
+                       incoming().status == 'finalizado')
+                    )
+                    && (incoming().userId == existing().userId)
+                    && (incoming().createdAt == existing().createdAt);
+      
+      allow delete: if false;
+    }
+
+    // CouponUsage Collection
+    match /couponUsage/{usageId} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && isValidId(usageId) && isValidCouponUsage(request.resource.data);
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && isValidCouponUsage(request.resource.data) && request.resource.data.count == existing().count + 1 && request.resource.data.updatedAt == request.time;
+    }
+  }
+}
+// Validation Blueprint for CouponUsage
+function isValidCouponUsage(data) {
+  return data.keys().hasAll(['uid', 'code', 'count', 'updatedAt'])
+      && data.keys().size() == 4
+      && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+      && data.code is string && data.code.size() > 0 && data.code.size() <= 20
+      && data.count is number && data.count >= 0
+      && data.updatedAt is timestamp;
+}

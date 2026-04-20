@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "staff": {
+      "title": "Staff Member",
+      "description": "Authorized staff member (Waiter, Driver, Porter)",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["waiter", "driver", "porter", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "name", "role", "createdAt"]
+    },
+    "couponUsage": {
+      "title": "Coupon Usage",
+      "description": "Tracks how many times a user has used a coupon",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "code": { "type": "string" },
+        "count": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "code", "count", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/authorized_staff/{email}": {
+      "schema": "staff",
+      "description": "Whitelist of authorized staff members and their roles."
+    },
+    "/couponUsage/{usageId}": {
+      "schema": "couponUsage",
+      "description": "Tracks usage of coupons per user."
+    }
+  }
+}
