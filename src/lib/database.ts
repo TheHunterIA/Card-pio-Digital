@@ -5,13 +5,22 @@ import { MenuItem, Order, OrderStatus, PaymentMethod, useStore, CartItem } from 
 
 // Set up listeners that directly sync into the Zustand store
 export function subscribeToMenu() {
-  const q = query(collection(db, 'menu'));
-  return onSnapshot(q, (snapshot) => {
-    const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MenuItem));
-    useStore.getState().setMenu(items);
-  }, (error) => {
-    console.error("Menu sync error:", error);
-  });
+  if (!db) {
+    console.error("Firestore não inicializado corretamente.");
+    return () => {};
+  }
+  try {
+    const q = query(collection(db, 'menu'));
+    return onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MenuItem));
+      useStore.getState().setMenu(items);
+    }, (error) => {
+      console.error("Menu sync error:", error);
+    });
+  } catch (e) {
+    console.error("Erro ao assinar snapshot do menu:", e);
+    return () => {};
+  }
 }
 
 export function subscribeToOrders() {

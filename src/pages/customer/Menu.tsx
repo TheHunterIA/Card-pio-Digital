@@ -5,8 +5,7 @@ import { Search, UtensilsCrossed, AlertTriangle, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { subscribeToSession } from '../../lib/database';
-import { subscribeToMenu } from '../../lib/database';
+import { subscribeToSession, subscribeToMenu } from '../../lib/database';
 
 export default function Menu() {
   const navigate = useNavigate();
