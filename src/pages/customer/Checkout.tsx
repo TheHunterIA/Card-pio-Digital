@@ -4,11 +4,12 @@ import { useStore, PaymentMethod } from '../../store';
 import { placeOrder } from '../../lib/database';
 import { doc, getDoc, query, collection, where, getDocs, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
-import { QrCode, Banknote, MapPin, Store, X, CreditCard, Smartphone, Check, Percent } from 'lucide-react';
+import { QrCode, Banknote, MapPin, Store, X, CreditCard, Smartphone, Check, Percent, Camera, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import IdentifyModal from '../../components/IdentifyModal';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Scanner } from '@yudiel/react-qr-scanner';
+import { getDistanceInMeters } from '../../lib/utils';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -45,6 +46,37 @@ export default function Checkout() {
   const [showIdentify, setShowIdentify] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [storeConfig, setStoreConfig] = useState<any>(null);
+  const [isOutOfRange, setIsOutOfRange] = useState(false);
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, 'settings', 'config'));
+        if (docSnap.exists()) {
+          setStoreConfig(docSnap.data());
+        }
+      } catch (e) {
+        console.error("Failed to load store config", e);
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  useEffect(() => {
+    if (orderType === 'delivery' && storeConfig?.deliveryGeoEnabled && customerLocation && storeConfig.lat && storeConfig.lng) {
+      const distanceMeters = getDistanceInMeters(
+        customerLocation.lat,
+        customerLocation.lng,
+        storeConfig.lat,
+        storeConfig.lng
+      );
+      const limitMeters = (storeConfig.deliveryRadiusKm || 5) * 1000;
+      setIsOutOfRange(distanceMeters > limitMeters);
+    } else {
+      setIsOutOfRange(false);
+    }
+  }, [customerLocation, storeConfig, orderType]);
 
   const applyCoupon = async () => {
     const code = useStore.getState().couponCode;
@@ -103,43 +135,31 @@ export default function Checkout() {
     useStore.getState().setCouponDiscount(0);
   };
 
-  useEffect(() => {
-    if (isScanning) {
-      const scanner = new Html5QrcodeScanner(
-        "checkout-reader",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false
-      );
-
-      scanner.render((decodedText) => {
-        scanner.clear();
-        setIsScanning(false);
-        try {
-          if (decodedText.startsWith("http")) {
-            const url = new URL(decodedText);
-            const mesa = url.searchParams.get("mesa");
-            if (mesa) {
-              setTableNumber(mesa);
-              setOrderType('dine-in');
-            } else {
-              setTableNumber(decodedText);
-              setOrderType('dine-in');
-            }
+  const handleScan = (detectedCodes: any[]) => {
+    if (detectedCodes && detectedCodes.length > 0) {
+      const decodedText = detectedCodes[0].rawValue;
+      setIsScanning(false);
+      try {
+        if (decodedText.startsWith("http")) {
+          const url = new URL(decodedText);
+          const mesa = url.searchParams.get("mesa");
+          if (mesa) {
+            setTableNumber(mesa);
+            setOrderType('dine-in');
           } else {
             setTableNumber(decodedText);
             setOrderType('dine-in');
           }
-        } catch (e) {
+        } else {
           setTableNumber(decodedText);
           setOrderType('dine-in');
         }
-      }, (err) => {});
-
-      return () => {
-        scanner.clear().catch(e => console.error(e));
-      };
+      } catch (e) {
+        setTableNumber(decodedText);
+        setOrderType('dine-in');
+      }
     }
-  }, [isScanning, setTableNumber, setOrderType]);
+  };
 
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '').substring(0, 8);
@@ -353,11 +373,24 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {customerLocation && (
+              {customerLocation && !isOutOfRange && (
                 <p className="mt-2 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                   Garantimos que o entregador encontrará sua posição exata.
                 </p>
+              )}
+              {isOutOfRange && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-2 text-xs font-medium text-red-700 bg-red-50 border border-red-100 px-4 py-3 rounded-xl flex items-start gap-2 shadow-sm"
+                >
+                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <p>
+                    Infelizmente o seu endereço está fora da nossa área de entrega (máx {storeConfig?.deliveryRadiusKm || 5}km). 
+                    Por favor, tente um endereço mais próximo ou no formato Retirada.
+                  </p>
+                </motion.div>
               )}
             </div>
           )}
@@ -552,7 +585,7 @@ export default function Checkout() {
         <div className="max-w-xl mx-auto pointer-events-auto">
           <button 
             onClick={handleFinish}
-            disabled={!paymentMethod || (orderType === 'delivery' && (!address.trim() || !addressNumber.trim())) || isProcessing}
+            disabled={!paymentMethod || (orderType === 'delivery' && (!address.trim() || !addressNumber.trim())) || isProcessing || isOutOfRange}
             className="w-full h-14 bg-brand disabled:bg-gray-300 disabled:text-gray-500 text-white font-display font-bold rounded-full active:scale-95 transition-all text-base flex items-center justify-center shadow-[0_20px_40px_-15px_rgba(255,78,0,0.5)] disabled:shadow-none tracking-wide"
           >
             {isProcessing ? (
@@ -581,21 +614,37 @@ export default function Checkout() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center pt-24 px-4"
+            className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center pt-16 px-4"
           >
             <button 
               onClick={() => setIsScanning(false)}
-              className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+              className="absolute top-6 right-6 p-3 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition-colors z-10"
             >
               <X className="w-6 h-6" />
             </button>
-            <div className="text-center mb-8">
-              <h3 className="font-display font-bold text-white text-2xl tracking-tight mb-2">Escaneie o QR da Mesa</h3>
-              <p className="text-white/60 text-sm font-medium">Aponte para o código da mesa para mudar para Consumo Local.</p>
+            <div className="text-center mb-6 relative z-10">
+              <div className="w-16 h-16 bg-brand rounded-2xl flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <Camera className="w-8 h-8 text-white" strokeWidth={2} />
+              </div>
+              <h3 className="font-display font-bold text-white text-3xl tracking-tight mb-2">Escaneie o QR da Mesa</h3>
+              <p className="text-white/70 text-sm font-medium">Aponte para o código da mesa para mudar para Consumo Local.</p>
             </div>
             
-            <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden p-2">
-              <div id="checkout-reader" className="w-full" style={{ border: 'none' }}></div>
+            <div className="w-full max-w-sm aspect-square bg-black rounded-[40px] overflow-hidden shadow-2xl border-4 border-white/10 relative z-10">
+              <Scanner 
+                onScan={handleScan}
+                formats={['qr_code']}
+                components={{
+                  audio: false,
+                  torch: true,
+                  finder: false,
+                }}
+                styles={{
+                  container: { width: '100%', height: '100%' }
+                }}
+              />
+              <div className="absolute inset-0 border-[3px] border-dashed border-white/30 rounded-[40px] pointer-events-none" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-brand rounded-3xl pointer-events-none" />
             </div>
           </motion.div>
         )}

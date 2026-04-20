@@ -4,9 +4,9 @@ import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useStore, OrderType, Order } from '../../store';
 import { getDistanceInMeters } from '../../lib/utils';
-import { QrCode, MapPin, Store, UtensilsCrossed, ChevronRight, X, ShieldCheck } from 'lucide-react';
+import { QrCode, MapPin, Store, UtensilsCrossed, ChevronRight, X, ShieldCheck, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -46,14 +46,9 @@ export default function Welcome() {
   }, [currentOrderId]);
 
   useEffect(() => {
-    const mesaParam = searchParams.get('mesa');
-    if (!mesaParam) return;
-
     const validateLocationAndProceed = async () => {
       // Por padrão, setamos requireUpfrontPayment como false a menos que falhe
       setRequireUpfrontPayment(false);
-      setOrderType('dine-in');
-      setTableNumber(mesaParam);
       
       try {
         const configDoc = await getDoc(doc(db, 'settings', 'config'));
@@ -61,14 +56,12 @@ export default function Welcome() {
 
         // Se Geofence não está ligada ou não tem coordenada, apenas prossegue normal
         if (!config?.geoEnabled || typeof config?.lat !== 'number' || typeof config?.lng !== 'number') {
-          navigate('/cardapio');
           return;
         }
 
         // Se não tem GPS, prossegue exigindo pagamento antecipado silenciosamente
         if (!navigator.geolocation) {
           setRequireUpfrontPayment(true);
-          navigate('/cardapio');
           return;
         }
 
@@ -87,26 +80,31 @@ export default function Welcome() {
             if (distance > maxRadius) {
               setRequireUpfrontPayment(true);
             }
-            navigate('/cardapio');
           },
           (err) => {
             console.error('GPS error:', err);
             // Se negou permissão, exige pagamento antecipado
             setRequireUpfrontPayment(true);
-            navigate('/cardapio');
           },
           { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
 
       } catch (err) {
         console.error('Erro ao buscar config de geo:', err);
-        // Em caso de erro de rede, apenas prossegue
-        navigate('/cardapio');
       }
     };
 
     validateLocationAndProceed();
-  }, [searchParams, setOrderType, setTableNumber, navigate, setRequireUpfrontPayment]);
+  }, [setRequireUpfrontPayment]);
+
+  useEffect(() => {
+    const mesaParam = searchParams.get('mesa');
+    if (!mesaParam) return;
+
+    setOrderType('dine-in');
+    setTableNumber(mesaParam);
+    navigate('/cardapio');
+  }, [searchParams, setOrderType, setTableNumber, navigate]);
 
   const handleTypeSelect = (type: OrderType) => {
     setSelectedType(type);
@@ -123,43 +121,27 @@ export default function Welcome() {
     navigate('/cardapio');
   };
 
-  useEffect(() => {
-    if (isScanning) {
-      const scanner = new Html5QrcodeScanner(
-        "reader",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        /* verbose= */ false
-      );
-
-      scanner.render((decodedText) => {
-        scanner.clear();
-        setIsScanning(false);
-        // Ex: "https://site.com/?mesa=04" -> "04"
-        try {
-          if (decodedText.startsWith("http")) {
-            const url = new URL(decodedText);
-            const mesa = url.searchParams.get("mesa");
-            if (mesa) {
-              handleTableSelect(mesa);
-            } else {
-              alert("QR Code inválido: Não contém o número da mesa.");
-            }
+  const handleScan = (detectedCodes: any[]) => {
+    if (detectedCodes && detectedCodes.length > 0) {
+      const decodedText = detectedCodes[0].rawValue;
+      setIsScanning(false);
+      try {
+        if (decodedText.startsWith("http")) {
+          const url = new URL(decodedText);
+          const mesa = url.searchParams.get("mesa");
+          if (mesa) {
+            handleTableSelect(mesa);
           } else {
-            // Or maybe the QR code just has the number "04"
-            handleTableSelect(decodedText);
+            alert("QR Code inválido: Não contém o número da mesa.");
           }
-        } catch (e) {
+        } else {
           handleTableSelect(decodedText);
         }
-      }, (err) => {
-        // silent fail on scan to not spam console
-      });
-
-      return () => {
-        scanner.clear().catch(e => console.error(e));
-      };
+      } catch (e) {
+        handleTableSelect(decodedText);
+      }
     }
-  }, [isScanning]);
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-oat">
@@ -265,21 +247,37 @@ export default function Welcome() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center pt-24 px-4"
+            className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center pt-16 px-4"
           >
             <button 
               onClick={() => setIsScanning(false)}
-              className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+              className="absolute top-6 right-6 p-3 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition-colors z-10"
             >
               <X className="w-6 h-6" />
             </button>
-            <div className="text-center mb-8">
-              <h3 className="font-display font-bold text-white text-2xl tracking-tight mb-2">Escaneie o QR Code</h3>
-              <p className="text-white/60 text-sm font-medium">Aponte a câmera para o código colado na sua mesa.</p>
+            <div className="text-center mb-6 relative z-10">
+              <div className="w-16 h-16 bg-brand rounded-2xl flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <Camera className="w-8 h-8 text-white" strokeWidth={2} />
+              </div>
+              <h3 className="font-display font-bold text-white text-3xl tracking-tight mb-2">Escaneie o QR Code</h3>
+              <p className="text-white/70 text-sm font-medium">Aponte a câmera para a mesa.</p>
             </div>
             
-            <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden p-2">
-              <div id="reader" className="w-full" style={{ border: 'none' }}></div>
+            <div className="w-full max-w-sm aspect-square bg-black rounded-[40px] overflow-hidden shadow-2xl border-4 border-white/10 relative z-10">
+              <Scanner 
+                onScan={handleScan}
+                formats={['qr_code']}
+                components={{
+                  audio: false,
+                  torch: true,
+                  finder: false,
+                }}
+                styles={{
+                  container: { width: '100%', height: '100%' }
+                }}
+              />
+              <div className="absolute inset-0 border-[3px] border-dashed border-white/30 rounded-[40px] pointer-events-none" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-brand rounded-3xl pointer-events-none" />
             </div>
           </motion.div>
         )}

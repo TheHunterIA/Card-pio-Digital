@@ -4,6 +4,7 @@ import { db } from '../../lib/firebase';
 import { Settings as SettingsIcon, Save, MapPin, Map, RefreshCw, Percent, Trash2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
+import { GoogleMap, useJsApiLoader, Circle, Marker } from '@react-google-maps/api';
 
 export default function Settings() {
   const [cep, setCep] = useState('');
@@ -11,6 +12,8 @@ export default function Settings() {
   const [number, setNumber] = useState('');
   const [radiusMeters, setRadiusMeters] = useState<number>(200);
   const [geoEnabled, setGeoEnabled] = useState(false);
+  const [deliveryRadiusKm, setDeliveryRadiusKm] = useState<number>(5);
+  const [deliveryGeoEnabled, setDeliveryGeoEnabled] = useState(false);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   
@@ -31,6 +34,11 @@ export default function Settings() {
   // @ts-ignore
   const googleMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
 
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: googleMapsKey || '',
+  });
+
   useEffect(() => {
     const loadConfig = async () => {
       try {
@@ -42,6 +50,8 @@ export default function Settings() {
           setNumber(data.number || '');
           setRadiusMeters(data.radiusMeters || 200);
           setGeoEnabled(data.geoEnabled || false);
+          setDeliveryRadiusKm(data.deliveryRadiusKm || 5);
+          setDeliveryGeoEnabled(data.deliveryGeoEnabled || false);
           setLat(data.lat || null);
           setLng(data.lng || null);
           setPixFee(data.pixFee ?? 0.99);
@@ -102,6 +112,8 @@ export default function Settings() {
         number,
         radiusMeters,
         geoEnabled,
+        deliveryRadiusKm,
+        deliveryGeoEnabled,
         lat,
         lng,
         pixFee,
@@ -292,7 +304,29 @@ export default function Settings() {
             </label>
           </div>
 
-          <div className="space-y-4">
+          <div className="flex items-start justify-between mb-6 pt-6 border-t border-black/5">
+            <div>
+              <h3 className="text-lg font-display font-bold text-ink flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-brand" />
+                Raio de Entrega (Delivery)
+              </h3>
+              <p className="text-ink-muted text-sm mt-1 max-w-lg">
+                Se ativado, bloqueia pedidos de delivery cujo endereço esteja além da distância máxima permitida pela loja.
+              </p>
+            </div>
+            
+            <label className="relative inline-flex items-center cursor-pointer mt-1 shrink-0">
+              <input 
+                type="checkbox" 
+                className="sr-only peer" 
+                checked={deliveryGeoEnabled}
+                onChange={(e) => setDeliveryGeoEnabled(e.target.checked)}
+              />
+              <div className="w-11 h-6 bg-oat border border-black/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 peer-checked:border-emerald-500"></div>
+            </label>
+          </div>
+
+          <div className="space-y-4 pt-6 border-t border-black/5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-1">
                 <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">CEP</label>
@@ -327,18 +361,7 @@ export default function Settings() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Número</label>
-                <input 
-                  type="text" 
-                  value={number}
-                  onChange={(e) => setNumber(e.target.value)}
-                  placeholder="Ex: 123"
-                  className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Raio de Tolerância (Metros)</label>
+                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Raio de Tolerância Local (Metros)</label>
                 <input 
                   type="number" 
                   value={radiusMeters}
@@ -346,7 +369,20 @@ export default function Settings() {
                   placeholder="Ex: 200"
                   className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
                 />
-                <p className="text-[10px] text-ink-muted mt-2 font-medium">Distância máx. permitida (O GPS de celulares oscila 30-80m).</p>
+                <p className="text-[10px] text-ink-muted mt-2 font-medium">Distância máx. para o cliente ler o QR na mesa.</p>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Raio de Entrega (Km)</label>
+                <input 
+                  type="number" 
+                  value={deliveryRadiusKm}
+                  onChange={(e) => setDeliveryRadiusKm(Number(e.target.value))}
+                  placeholder="Ex: 5"
+                  step="0.5"
+                  className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                />
+                <p className="text-[10px] text-ink-muted mt-2 font-medium">Distância máx. permitida para pedidos delivery.</p>
               </div>
             </div>
 
@@ -365,6 +401,52 @@ export default function Settings() {
                 )}
               </div>
             </div>
+
+            {isLoaded && lat && lng && (
+              <div className="mt-4 border-2 border-black/5 rounded-3xl overflow-hidden shadow-sm h-[400px]">
+                <GoogleMap
+                  mapContainerStyle={{ width: '100%', height: '100%' }}
+                  center={{ lat, lng }}
+                  zoom={deliveryRadiusKm > 0 ? (deliveryRadiusKm > 10 ? 11 : 13) : 15}
+                  options={{
+                    disableDefaultUI: true,
+                    zoomControl: true,
+                  }}
+                >
+                  <Marker position={{ lat, lng }} />
+                  
+                  {/* Raio Delivery (Brand) */}
+                  {deliveryGeoEnabled && (
+                    <Circle 
+                      center={{ lat, lng }}
+                      radius={deliveryRadiusKm * 1000}
+                      options={{
+                        fillColor: '#FF4E00',
+                        fillOpacity: 0.1,
+                        strokeColor: '#FF4E00',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 2,
+                      }}
+                    />
+                  )}
+                  
+                  {/* Raio Local Tables (Verde) */}
+                  {geoEnabled && (
+                    <Circle 
+                      center={{ lat, lng }}
+                      radius={radiusMeters}
+                      options={{
+                        fillColor: '#10B981',
+                        fillOpacity: 0.3,
+                        strokeColor: '#10B981',
+                        strokeOpacity: 1,
+                        strokeWeight: 2,
+                      }}
+                    />
+                  )}
+                </GoogleMap>
+              </div>
+            )}
 
           </div>
         </div>
