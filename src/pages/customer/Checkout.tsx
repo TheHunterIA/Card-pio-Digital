@@ -45,8 +45,19 @@ export default function Checkout() {
     return sum + (((item.item?.price || 0) + extrasPrice) * item.quantity);
   }, 0);
 
-  // @ts-ignore
   const googleMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
+
+  const handleGeocodeCustomerAddress = async (street: string, num: string) => {
+    if (!googleMapsKey || !street) return;
+    try {
+      const query = num ? `${street}, ${num}` : street;
+      const results = await geocodeByAddress(query);
+      const latLng = await getLatLng(results[0]);
+      setCustomerLocation(latLng);
+    } catch (e) {
+      console.error("Customer geocoding failed", e);
+    }
+  };
 
   const [isLocating, setIsLocating] = useState(false);
   const [isFetchingCep, setIsFetchingCep] = useState(false);
@@ -358,9 +369,7 @@ export default function Checkout() {
                         onChange: async (val: any) => {
                           if (val) {
                             setAddress(val.label);
-                            const results = await geocodeByAddress(val.label);
-                            const latLng = await getLatLng(results[0]);
-                            setCustomerLocation(latLng);
+                            await handleGeocodeCustomerAddress(val.label, addressNumber);
                           }
                         },
                         placeholder: "Buscar endereço...",
@@ -392,6 +401,7 @@ export default function Checkout() {
                     type="text"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
+                    onBlur={() => handleGeocodeCustomerAddress(address, addressNumber)}
                     placeholder="Nome da Rua / Logradouro"
                     className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
                   />
@@ -402,6 +412,7 @@ export default function Checkout() {
                     type="text"
                     value={addressNumber}
                     onChange={(e) => setAddressNumber(e.target.value)}
+                    onBlur={() => handleGeocodeCustomerAddress(address, addressNumber)}
                     placeholder="Número"
                     className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
                   />

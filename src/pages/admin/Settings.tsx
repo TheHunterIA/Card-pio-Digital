@@ -388,14 +388,7 @@ export default function Settings() {
                         onChange: async (val: any) => {
                           if (val) {
                             setAddress(val.label);
-                            try {
-                              const results = await geocodeByAddress(val.label);
-                              const latLng = await getLatLng(results[0]);
-                              setLat(latLng.lat);
-                              setLng(latLng.lng);
-                            } catch (e) {
-                              console.error("Geocoding failed", e);
-                            }
+                            await handleGeocodeAddress(val.label, number);
                           }
                         },
                         placeholder: "Buscar endereço da loja...",
