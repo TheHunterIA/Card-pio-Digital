@@ -101,14 +101,16 @@ service cloud.firestore {
           && (!('cep' in data) || (data.cep is string))
           && (!('address' in data) || (data.address is string))
           && (!('number' in data) || (data.number is string))
-          && (!('lat' in data) || (data.lat is number))
-          && (!('lng' in data) || (data.lng is number))
+          && (!('lat' in data) || (data.lat is number || data.lat == null))
+          && (!('lng' in data) || (data.lng is number || data.lng == null))
           && (!('pixFee' in data) || (data.pixFee is number))
           && (!('creditFee' in data) || (data.creditFee is number))
           && (!('debitFee' in data) || (data.debitFee is number))
           && (!('deliveryFee' in data) || (data.deliveryFee is number))
           && (!('geoEnabled' in data) || (data.geoEnabled is bool))
+          && (!('deliveryGeoEnabled' in data) || (data.deliveryGeoEnabled is bool))
           && (!('radiusMeters' in data) || (data.radiusMeters is number))
+          && (!('deliveryRadiusKm' in data) || (data.deliveryRadiusKm is number))
           && (!('coupons' in data) || (data.coupons is map))
           && (!('updatedAt' in data) || (data.updatedAt is string));
     }
@@ -165,10 +167,25 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Validation Blueprint for DeliverySettings
+    function isValidDeliverySettings(data) {
+      return data.keys().hasAll(['radii', 'peakHours', 'baseLocation'])
+          && (data.keys().size() >= 3 && data.keys().size() <= 4)
+          && data.radii is list
+          && data.peakHours is list
+          && data.baseLocation is map
+          && data.baseLocation.keys().hasAll(['lat', 'lng'])
+          && data.baseLocation.lat is number
+          && data.baseLocation.lng is number;
+    }
+
     // Settings Collection
     match /settings/{docId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin() && isValidStoreConfig(incoming());
+      allow write: if isAdmin() && (
+        (docId == 'config' && isValidStoreConfig(incoming())) ||
+        (docId == 'delivery' && isValidDeliverySettings(incoming()))
+      );
     }
 
     // Menu Collection
