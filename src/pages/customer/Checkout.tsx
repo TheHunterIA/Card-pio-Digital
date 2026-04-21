@@ -533,18 +533,26 @@ export default function Checkout() {
             {orderType === 'delivery' && (
               <div className="flex flex-col gap-1 py-1">
                 <div className="flex justify-between text-sm text-ink-muted">
-                  <div className="flex items-center gap-1.5">
-                    <span>Taxa de Entrega</span>
-                    {isGeocoding ? (
-                      <span className="text-[10px] text-brand font-bold animate-pulse">Calculando frete...</span>
-                    ) : customerLocation && (
-                      <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-md font-bold">
-                        {((getDistanceInMeters(
-                          customerLocation.lat, 
-                          customerLocation.lng, 
-                          deliveryConfig?.baseLocation?.lat || storeConfig?.lat, 
-                          deliveryConfig?.baseLocation?.lng || storeConfig?.lng
-                        ) || 0) / 1000).toFixed(1)} km
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span>Taxa de Entrega</span>
+                      {isGeocoding ? (
+                        <span className="text-[10px] text-brand font-bold animate-pulse">Calculando frete...</span>
+                      ) : customerLocation && (
+                        <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-md font-bold">
+                          {((getDistanceInMeters(
+                            customerLocation.lat, 
+                            customerLocation.lng, 
+                            deliveryConfig?.baseLocation?.lat || storeConfig?.lat || 0, 
+                            deliveryConfig?.baseLocation?.lng || storeConfig?.lng || 0
+                          ) || 0) / 1000).toFixed(1)} km
+                        </span>
+                      )}
+                    </div>
+                    {!(deliveryConfig?.baseLocation?.lat || storeConfig?.lat) && (
+                      <span className="text-[9px] text-red-500 font-bold flex items-center gap-1 leading-tight max-w-[200px]">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        O app está sem a localização da loja! Ajuste no Admin.
                       </span>
                     )}
                   </div>

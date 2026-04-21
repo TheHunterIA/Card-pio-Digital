@@ -182,7 +182,7 @@ export default function LogisticsSettings() {
               </div>
            </div>
            
-           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mt-4 sm:mt-0">
              <div className="flex items-center gap-3 bg-oat rounded-2xl px-4 py-2 border border-black/5 w-full sm:w-auto">
                <div className="text-left">
                  <p className="text-[9px] font-bold text-ink-muted uppercase">Frete grátis apartir de (R$)</p>
@@ -200,7 +200,29 @@ export default function LogisticsSettings() {
                className="px-4 py-2 bg-oat border border-black/5 rounded-xl text-xs font-bold text-ink-muted hover:bg-black/5 hover:text-ink transition-all flex items-center gap-2 w-full sm:w-auto justify-center"
              >
                <RefreshCw className="w-3 h-3" />
-               Atualizar do Perfil da Loja
+               Sincronizar (Perfil)
+             </button>
+             
+             <button
+               onClick={() => {
+                 if (navigator.geolocation) {
+                   navigator.geolocation.getCurrentPosition(
+                     (pos) => {
+                       setLocalConfig(prev => ({
+                         ...prev,
+                         baseLocation: { lat: pos.coords.latitude, lng: pos.coords.longitude }
+                       }));
+                       alert('📍 Localização preenchida pelo seu GPS! Clique em Salvar.');
+                     },
+                     (err) => alert('Erro GPS: ' + err.message),
+                     { enableHighAccuracy: true }
+                   );
+                 }
+               }}
+               className="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold hover:bg-black/80 transition-all flex items-center gap-2 w-full sm:w-auto justify-center"
+             >
+               <MapPin className="w-3 h-3" />
+               Forçar GPS Local
              </button>
            </div>
         </div>

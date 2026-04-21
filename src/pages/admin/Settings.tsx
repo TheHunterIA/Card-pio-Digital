@@ -83,7 +83,20 @@ export default function Settings() {
       setLat(latLng.lat);
       setLng(latLng.lng);
     } catch (e) {
-      console.error("Geocoding failed", e);
+      if (shopNumber) {
+        try {
+          // Fallback to street only if combining with number confused the Google API
+          const results = await geocodeByAddress(fullAddress);
+          const latLng = await getLatLng(results[0]);
+          setLat(latLng.lat);
+          setLng(latLng.lng);
+          alert('📍 O número exato da loja não foi encontrado no GPS. O mapa foi centralizado na rua. Por favor, clique no mapa abaixo no local exato do estabelecimento para maior precisão.');
+        } catch (e2) {
+          console.error("Geocoding fallback failed", e2);
+        }
+      } else {
+        console.error("Geocoding failed", e);
+      }
     } finally {
       setIsFetchingLocation(false);
     }
@@ -435,11 +448,42 @@ export default function Settings() {
                     <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-[11px] font-bold text-red-900 leading-tight">Coordenadas não capturadas!</p>
-                      <p className="text-[10px] text-red-700 leading-tight mt-0.5">O endereço foi digitado manualmente mas o GPS não o reconheceu. <strong>Selecione o endereço na lista de sugestões</strong> ou use o mapa abaixo para marcar o local exato.</p>
+                      <p className="text-[10px] text-red-700 leading-tight mt-0.5">O endereço foi digitado mas o GPS não o reconheceu. <strong>Selecione o endereço na lista de sugestões</strong> ou clique em 'Usar Meu GPS Atual'.</p>
                     </div>
                   </motion.div>
                 )}
-                <p className="text-[10px] text-ink-muted px-1 mt-2">Ao preencher o endereço ou CEP, o sistema captura automaticamente a localização para o cálculo de frete.</p>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-3 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        setIsFetchingLocation(true);
+                        navigator.geolocation.getCurrentPosition(
+                          (pos) => {
+                            setLat(pos.coords.latitude);
+                            setLng(pos.coords.longitude);
+                            setIsFetchingLocation(false);
+                            alert('📍 Localização (Lat/Lng) preenchida com sucesso pelo GPS! Lembre-se de clicar em "Salvar".');
+                          },
+                          (err) => {
+                            setIsFetchingLocation(false);
+                            alert('Erro ao buscar GPS: ' + err.message + '. Por favor, autorize o uso de localização no seu navegador.');
+                          },
+                          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                        );
+                      } else {
+                        alert('Seu navegador não suporta GPS.');
+                      }
+                    }}
+                    className="flex-1 w-full bg-black text-white text-xs font-bold py-2 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-black/80 transition-colors active:scale-95"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Usar Meu GPS Atual (Forçar Coordenadas)
+                  </button>
+                </div>
+                
+                <p className="text-[10px] text-ink-muted px-1 mt-2">Ao preencher o endereço ou CEP, o sistema tenta capturar automaticamente a localização. Se falhar, use o GPS acima.</p>
               </div>
             </div>
 
@@ -495,8 +539,8 @@ export default function Settings() {
             </div>
 
             {/* Coordinates Status block */}
-            <div className={`mt-4 p-4 rounded-2xl border flex items-center gap-3 ${lat && lng ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-oat border-black/5 text-ink-muted'}`}>
-              <Map className={`w-5 h-5 shrink-0 ${lat && lng ? 'text-emerald-500' : ''}`} />
+            <div className={`mt-4 p-4 rounded-2xl border flex items-center gap-3 ${lat && lng ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+              <Map className={`w-5 h-5 shrink-0 ${lat && lng ? 'text-emerald-500' : 'text-red-500'}`} />
               <div className="text-sm font-medium">
                 {lat && lng ? (
                   <>
@@ -504,18 +548,26 @@ export default function Settings() {
                   </>
                 ) : (
                   <>
-                    <span className="font-bold">Aguardando Coordenadas:</span> Digite um CEP ou endereço válido para o sistema ancorar a loja no satélite.
+                    <span className="font-bold">Sem Coordenadas GPS!</span> O app usará o mapa interativo abaixo. Navegue, dê zoom e <strong>clique no local da sua loja</strong> para fixar o pino 📍.
                   </>
                 )}
               </div>
             </div>
 
-            {isLoaded && lat && lng && (
-              <div className="mt-4 border-2 border-black/5 rounded-3xl overflow-hidden shadow-sm h-[400px]">
+            {isLoaded && (
+              <div className="mt-4 border-2 border-black/10 rounded-3xl overflow-hidden shadow-sm h-[450px] relative">
+                {!lat && !lng && (
+                  <div className="absolute inset-0 z-10 pointer-events-none flex items-start justify-center p-4">
+                    <div className="bg-ink text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xl flex items-center gap-2 animate-bounce">
+                      <MapPin className="w-4 h-4 text-brand" />
+                      Clique no mapa para marcar a loja!
+                    </div>
+                  </div>
+                )}
                 <GoogleMap
                   mapContainerStyle={{ width: '100%', height: '100%' }}
-                  center={{ lat, lng }}
-                  zoom={deliveryRadiusKm > 0 ? (deliveryRadiusKm > 10 ? 11 : 13) : 15}
+                  center={lat && lng ? { lat, lng } : { lat: -23.5505, lng: -46.6333 }} // Fallback to SP, Brazil if empty
+                  zoom={lat && lng ? (deliveryRadiusKm > 0 ? (deliveryRadiusKm > 10 ? 11 : 13) : 15) : 5}
                   onClick={(e) => {
                     if (e.latLng) {
                       setLat(e.latLng.lat());
@@ -527,7 +579,7 @@ export default function Settings() {
                     zoomControl: true,
                   }}
                 >
-                  <Marker position={{ lat, lng }} />
+                  {lat !== 0 && lng !== 0 && <Marker position={{ lat, lng }} />}
                   
                   {/* Raio Delivery (Brand) */}
                   {deliveryGeoEnabled && (
