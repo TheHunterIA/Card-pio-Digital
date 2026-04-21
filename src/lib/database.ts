@@ -35,6 +35,11 @@ export function subscribeToOrders() {
         // Sino de balcão clássico
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
         audio.play().catch(e => console.log('Audio autoplay blocked by browser', e));
+        
+        // Vibração (para dispositivos móveis/tablets compatíveis) - padrão: 200ms liga, 100ms desliga, 200ms liga
+        if ('vibrate' in navigator) {
+          navigator.vibrate([200, 100, 200]);
+        }
       }
     }
     isInitialRender = false;
