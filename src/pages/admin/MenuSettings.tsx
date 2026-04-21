@@ -359,6 +359,7 @@ export default function MenuSettings() {
                         onChange={(e) => setFormItem({...formItem, category: e.target.value})}
                         className="w-full bg-oat border-2 border-transparent rounded-xl p-3 text-sm focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 focus:bg-white font-display font-bold text-ink transition-all"
                       >
+                        <option value="Combos">Combos</option>
                         <option value="Lanches">Lanches</option>
                         <option value="Acompanhamentos">Acompanhamentos</option>
                         <option value="Bebidas">Bebidas</option>

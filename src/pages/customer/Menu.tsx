@@ -119,7 +119,7 @@ export default function Menu() {
 
   const filteredMenu = useMemo(() => {
     const searchTerm = search.toLowerCase().trim();
-    const order = ['Lanches', 'Acompanhamentos', 'Bebidas'];
+    const order = ['Combos', 'Lanches', 'Acompanhamentos', 'Bebidas', 'Sobremesas'];
     
     // Intelligent mapping for synonyms
     const synonyms: Record<string, string[]> = {
@@ -127,6 +127,8 @@ export default function Menu() {
       'burguer': ['lanches', 'hamburguer', 'burger', 'sanduiche'],
       'burger': ['lanches', 'hamburguer', 'burguer', 'sanduiche'],
       'lanche': ['lanches', 'hamburguer', 'burger', 'burguer'],
+      'combo': ['combos', 'combo', 'promoção', 'oferta', 'kit'],
+      'promocao': ['combos', 'promo', 'promoção', 'oferta'],
       'refri': ['bebidas', 'refrigerante', 'suco', 'coca', 'beber'],
       'beber': ['bebidas', 'refrigerante', 'suco', 'cerveja'],
       'refrigerante': ['bebidas', 'refri', 'coca'],
