@@ -36,7 +36,7 @@
             "properties": {
               "id": { "type": "string" },
               "maxDistance": { "type": "number" },
-              "fee": { "type": "number" }
+              "feePerKm": { "type": "number" }
             }
           }
         },
@@ -59,7 +59,8 @@
             "lat": { "type": "number" },
             "lng": { "type": "number" }
           }
-        }
+        },
+        "freeDeliveryThreshold": { "type": "number" }
       }
     }
   },

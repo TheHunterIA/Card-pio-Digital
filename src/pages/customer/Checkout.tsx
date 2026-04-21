@@ -37,6 +37,8 @@ export default function Checkout() {
   const setCouponCode = useStore(state => state.setCouponCode);
   const couponDiscount = useStore(state => state.couponDiscount);
   const setCouponDiscount = useStore(state => state.setCouponDiscount);
+  const isFreeDeliveryCoupon = useStore(state => state.isFreeDeliveryCoupon);
+  const setIsFreeDeliveryCoupon = useStore(state => state.setIsFreeDeliveryCoupon);
 
   // @ts-ignore
   const googleMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
@@ -95,7 +97,7 @@ export default function Checkout() {
 
       // 2. Calculate Dynamic Fee
       if (deliveryConfig && deliveryConfig.radii.length > 0) {
-        const dynamicFee = getDeliveryFeeCalculation(distanceKm, deliveryConfig);
+        const dynamicFee = getDeliveryFeeCalculation(distanceKm, deliveryConfig, total);
         setCurrentDeliveryFee(dynamicFee);
       } else {
         // Fallback to static fee in storeConfig
@@ -129,7 +131,7 @@ export default function Checkout() {
           return;
         }
 
-        const { discount, limitPerUser } = couponData;
+        const { discount, limitPerUser, type } = couponData;
 
         // Check usage
         const usageQuery = query(
@@ -149,7 +151,8 @@ export default function Checkout() {
           return;
         }
 
-        useStore.getState().setCouponDiscount(discount);
+        useStore.getState().setCouponDiscount(discount || 0);
+        useStore.getState().setIsFreeDeliveryCoupon(type === 'free_delivery');
       }
     } catch (e) {
       console.error(e);
@@ -162,6 +165,7 @@ export default function Checkout() {
   const removeCoupon = () => {
     useStore.getState().setCouponCode('');
     useStore.getState().setCouponDiscount(0);
+    useStore.getState().setIsFreeDeliveryCoupon(false);
   };
 
   const handleScan = (detectedCodes: any[]) => {
@@ -228,7 +232,7 @@ export default function Checkout() {
     return sum + ((item.item.price + extrasPrice) * item.quantity);
   }, 0);
   const discountAmount = total * (couponDiscount / 100);
-  const deliveryFeeValue = orderType === 'delivery' ? currentDeliveryFee : 0;
+  const deliveryFeeValue = (orderType === 'delivery' && !isFreeDeliveryCoupon) ? currentDeliveryFee : 0;
   const finalTotal = total - discountAmount + deliveryFeeValue;
 
   const handleGetLocation = () => {
@@ -507,9 +511,31 @@ export default function Checkout() {
               </div>
             )}
             {orderType === 'delivery' && (
-              <div className="flex justify-between text-sm text-ink-muted">
-                <span>Taxa de Entrega</span>
-                <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentDeliveryFee)}</span>
+              <div className="flex flex-col gap-1 py-1">
+                <div className="flex justify-between text-sm text-ink-muted">
+                  <div className="flex items-center gap-1.5">
+                    <span>Taxa de Entrega</span>
+                    {customerLocation && (
+                      <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-md font-bold">
+                        {((getDistanceInMeters(
+                          customerLocation.lat, 
+                          customerLocation.lng, 
+                          deliveryConfig?.baseLocation?.lat || storeConfig?.lat, 
+                          deliveryConfig?.baseLocation?.lng || storeConfig?.lng
+                        ) || 0) / 1000).toFixed(1)} km
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-bold text-ink">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentDeliveryFee)}
+                  </span>
+                </div>
+                {!customerLocation && address.trim() && (
+                  <p className="text-[9px] text-amber-600 font-bold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Selecione o endereço sugerido para calcular o frete exato.
+                  </p>
+                )}
               </div>
             )}
             <div className="pt-3 border-t border-black/5 flex justify-between items-center">

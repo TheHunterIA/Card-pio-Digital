@@ -71,7 +71,7 @@ export interface Order {
 export interface DeliveryRadius {
   id: string;
   maxDistance: number; // km
-  fee: number;
+  feePerKm: number;
 }
 
 export interface PeakHourRule {
@@ -86,6 +86,7 @@ export interface DeliveryConfig {
   radii: DeliveryRadius[];
   peakHours: PeakHourRule[];
   baseLocation: { lat: number; lng: number };
+  freeDeliveryThreshold?: number;
 }
 
 interface AppState {
@@ -143,6 +144,8 @@ interface AppState {
   setCouponCode: (code: string) => void;
   couponDiscount: number;
   setCouponDiscount: (discount: number) => void;
+  isFreeDeliveryCoupon: boolean;
+  setIsFreeDeliveryCoupon: (val: boolean) => void;
 
   // Sessions & Real-time Sharing
   currentSessionId: string | null;
@@ -266,7 +269,7 @@ export const useStore = create<AppState>()(
       selectedExtras
     } : c)
   })),
-  clearCart: () => set({ cart: [], couponCode: '', couponDiscount: 0 }),
+  clearCart: () => set({ cart: [], couponCode: '', couponDiscount: 0, isFreeDeliveryCoupon: false }),
   
   orders: [],
   setOrders: (orders) => set({ orders }),
@@ -279,6 +282,8 @@ export const useStore = create<AppState>()(
   setCouponCode: (code) => set({ couponCode: code }),
   couponDiscount: 0,
   setCouponDiscount: (discount) => set({ couponDiscount: discount }),
+  isFreeDeliveryCoupon: false,
+  setIsFreeDeliveryCoupon: (val) => set({ isFreeDeliveryCoupon: val }),
 
   deliveryConfig: null,
   setDeliveryConfig: (deliveryConfig) => set({ deliveryConfig }),
@@ -303,6 +308,7 @@ export const useStore = create<AppState>()(
         currentOrderId: state.currentOrderId,
         couponCode: state.couponCode,
         couponDiscount: state.couponDiscount,
+        isFreeDeliveryCoupon: state.isFreeDeliveryCoupon,
         currentSessionId: state.currentSessionId,
       })
     }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Settings as SettingsIcon, Save, MapPin, Map, RefreshCw, Percent, Trash2, X } from 'lucide-react';
+import { Settings as SettingsIcon, Save, MapPin, Map, RefreshCw, Percent, Trash2, X, Bike } from 'lucide-react';
 import { motion } from 'motion/react';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
 import { GoogleMap, useJsApiLoader, Circle, Marker } from '@react-google-maps/api';
@@ -26,10 +26,11 @@ export default function Settings() {
   const [creditFee, setCreditFee] = useState<number>(3.99);
   const [debitFee, setDebitFee] = useState<number>(1.99);
   const [deliveryFee, setDeliveryFee] = useState<number>(3.50);
-  const [coupons, setCoupons] = useState<Record<string, { discount: number, limitPerUser: number }>>({});
+  const [coupons, setCoupons] = useState<Record<string, { discount: number, limitPerUser: number, type?: 'percentage' | 'free_delivery' }>>({});
   const [newCode, setNewCode] = useState('');
   const [newDiscount, setNewDiscount] = useState('');
   const [newLimit, setNewLimit] = useState('');
+  const [newCouponType, setNewCouponType] = useState<'percentage' | 'free_delivery'>('percentage');
 
   // @ts-ignore
   const googleMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
@@ -138,12 +139,13 @@ export default function Settings() {
   };
 
   const handleAddCoupon = async () => {
-    if (newCode && newDiscount) {
+    if (newCode && (newCouponType === 'free_delivery' || newDiscount)) {
       const updatedCoupons = { 
         ...coupons, 
         [newCode]: { 
-          discount: Number(newDiscount), 
-          limitPerUser: Number(newLimit) || 1 
+          discount: newCouponType === 'percentage' ? Number(newDiscount) : 0, 
+          limitPerUser: Number(newLimit) || 1,
+          type: newCouponType
         } 
       };
       setCoupons(updatedCoupons);
@@ -458,7 +460,7 @@ export default function Settings() {
               <Percent className="w-5 h-5 text-brand" />
               Cupons de Desconto
             </h3>
-            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 animate-pulse">Salva automaticamente ao adicionar/remover</p>
+            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 animate-pulse">Salva automaticamente</p>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 mb-8 bg-oat p-4 rounded-2xl border border-black/5">
@@ -471,19 +473,32 @@ export default function Settings() {
                 onChange={e => setNewCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
               />
             </div>
-            <div className="w-full sm:w-32 space-y-1">
-              <label className="block text-[10px] font-display font-bold text-ink-muted uppercase tracking-wider ml-1">Desconto</label>
-              <div className="relative">
-                <input 
-                  type="number"
-                  placeholder="0"
-                  className="w-full bg-white border-2 border-transparent rounded-xl px-4 py-3 focus:outline-none focus:border-brand text-sm font-bold"
-                  value={newDiscount}
-                  onChange={e => setNewDiscount(e.target.value)}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted font-bold text-xs">%</span>
-              </div>
+            <div className="w-full sm:w-40 space-y-1">
+              <label className="block text-[10px] font-display font-bold text-ink-muted uppercase tracking-wider ml-1">Tipo</label>
+              <select 
+                value={newCouponType}
+                onChange={e => setNewCouponType(e.target.value as any)}
+                className="w-full bg-white border-2 border-transparent rounded-xl px-4 py-3 focus:outline-none focus:border-brand text-sm font-bold"
+              >
+                <option value="percentage">Desconto %</option>
+                <option value="free_delivery">Frete Grátis</option>
+              </select>
             </div>
+            {newCouponType === 'percentage' && (
+              <div className="w-full sm:w-32 space-y-1">
+                <label className="block text-[10px] font-display font-bold text-ink-muted uppercase tracking-wider ml-1">Desconto</label>
+                <div className="relative">
+                  <input 
+                    type="number"
+                    placeholder="0"
+                    className="w-full bg-white border-2 border-transparent rounded-xl px-4 py-3 focus:outline-none focus:border-brand text-sm font-bold"
+                    value={newDiscount}
+                    onChange={e => setNewDiscount(e.target.value)}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted font-bold text-xs">%</span>
+                </div>
+              </div>
+            )}
             <div className="w-full sm:w-32 space-y-1">
               <label className="block text-[10px] font-display font-bold text-ink-muted uppercase tracking-wider ml-1">Limite Cliente</label>
               <input 
@@ -504,15 +519,17 @@ export default function Settings() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {Object.entries(coupons).length > 0 ? (
-              Object.entries(coupons).map(([code, { discount, limitPerUser }]) => (
+              Object.entries(coupons).map(([code, { discount, limitPerUser, type }]) => (
                 <div key={code} className="flex justify-between items-center p-4 bg-white border border-black/5 rounded-2xl shadow-sm hover:border-brand/20 transition-colors group">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-brand/5 rounded-xl flex items-center justify-center">
-                      <Percent className="w-5 h-5 text-brand" />
+                    <div className="w-10 h-10 bg-brand/5 rounded-xl flex items-center justify-center text-brand">
+                      {type === 'free_delivery' ? <Bike className="w-5 h-5" /> : <Percent className="w-5 h-5" />}
                     </div>
                     <div>
                       <span className="block font-display font-bold text-ink leading-tight">{code}</span>
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">{discount}% de desconto</span>
+                      <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+                        {type === 'free_delivery' ? 'Frete Grátis' : `${discount}% de desconto`}
+                      </span>
                       <span className="block text-[10px] font-bold text-ink-muted uppercase tracking-wider">Limite: {limitPerUser}x por cliente</span>
                     </div>
                   </div>

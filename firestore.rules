@@ -50,7 +50,7 @@ service cloud.firestore {
     
     // Validation Blueprint for Order
     function isValidOrder(data) {
-      return data.keys().size() >= 1 && data.keys().size() <= 45
+      return data.keys().size() >= 1 && data.keys().size() <= 60
           && (!('userId' in data) || (data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128))
           && (!('whatsapp' in data) || (data.whatsapp is string && (data.whatsapp.size() == 0 || (data.whatsapp.size() >= 8 && data.whatsapp.size() <= 20))))
           && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 100))
@@ -60,6 +60,10 @@ service cloud.firestore {
           && (!('addressNumber' in data) || (data.addressNumber is string && data.addressNumber.size() <= 20))
           && (!('addressComplement' in data) || (data.addressComplement is string && data.addressComplement.size() <= 100))
           && (!('items' in data) || (data.items is list && data.items.size() > 0 && data.items.size() <= 50))
+          && (!('subtotal' in data) || (data.subtotal is number && data.subtotal >= 0))
+          && (!('discount' in data) || (data.discount is number && data.discount >= 0))
+          && (!('deliveryFee' in data) || (data.deliveryFee is number && data.deliveryFee >= 0))
+          && (!('couponCode' in data) || (data.couponCode is string || data.couponCode == null))
           && (!('total' in data) || (data.total is number && data.total >= 0))
           && (!('status' in data) || (data.status in ['na-fila', 'preparando', 'saiu-entrega', 'finalizado', 'cancelado', 'pronto-entrega', 'em-rota', 'servido']))
           && (!('paymentMethod' in data) || data.paymentMethod in ['pix', 'credit', 'debit', 'na-entrega'])
@@ -73,7 +77,9 @@ service cloud.firestore {
           && (!('driverId' in data) || data.driverId is string)
           && (!('driverName' in data) || data.driverName is string)
           && (!('customerLocation' in data) || data.customerLocation is map)
-          && (!('driverLocation' in data) || data.driverLocation is map);
+          && (!('driverLocation' in data) || data.driverLocation is map)
+          && (!('sessionId' in data) || (data.sessionId is string || data.sessionId == null))
+          && (!('deviceId' in data) || (data.deviceId is string));
     }
 
     // Validation Blueprint for Client
@@ -170,13 +176,14 @@ service cloud.firestore {
     // Validation Blueprint for DeliverySettings
     function isValidDeliverySettings(data) {
       return data.keys().hasAll(['radii', 'peakHours', 'baseLocation'])
-          && (data.keys().size() >= 3 && data.keys().size() <= 4)
+          && (data.keys().size() >= 3 && data.keys().size() <= 10)
           && data.radii is list
           && data.peakHours is list
           && data.baseLocation is map
           && data.baseLocation.keys().hasAll(['lat', 'lng'])
           && data.baseLocation.lat is number
-          && data.baseLocation.lng is number;
+          && data.baseLocation.lng is number
+          && (!('freeDeliveryThreshold' in data) || data.freeDeliveryThreshold is number);
     }
 
     // Settings Collection
@@ -253,6 +260,17 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && isValidId(usageId) && isValidCouponUsage(request.resource.data);
       allow update: if isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && isValidCouponUsage(request.resource.data) && request.resource.data.count == existing().count + 1 && request.resource.data.updatedAt == request.time;
+    }
+
+    // Sessions Collection
+    match /sessions/{sessionId} {
+      allow read: if true; // Tables are public for identification
+      allow write: if isAdmin() || isWaiter() || (isSignedIn() && isValidId(sessionId));
+      
+      match /orders/{orderId} {
+        allow read: if true;
+        allow write: if isAdmin() || isWaiter() || (isSignedIn() && isValidOrder(incoming()));
+      }
     }
   }
 }

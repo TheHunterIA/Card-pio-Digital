@@ -18,27 +18,34 @@ export default function LogisticsSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const syncBaseLocation = async () => {
+    // Try to get base location from main config first
+    setIsLoading(true);
+    const configSnap = await getDoc(doc(db, 'settings', 'config'));
+    if (configSnap.exists()) {
+      const data = configSnap.data();
+      if (data.lat && data.lng) {
+        setLocalConfig(prev => ({
+          ...prev,
+          baseLocation: { lat: data.lat, lng: data.lng }
+        }));
+        // If we are coming from a notification or manual click, we alert
+        if (!isLoading) {
+          alert('Coordenadas sincronizadas com o perfil da loja!');
+        }
+      } else {
+        alert('Localização não encontrada no perfil da loja. Configure o endereço em "Geral" primeiro.');
+      }
+    }
+    setIsLoading(false);
+  };
+
   useEffect(() => {
     const unsub = subscribeToDeliveryConfig();
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    const syncBaseLocation = async () => {
-      // Try to get base location from main config first
-      const configSnap = await getDoc(doc(db, 'settings', 'config'));
-      if (configSnap.exists()) {
-        const data = configSnap.data();
-        if (data.lat && data.lng) {
-          setLocalConfig(prev => ({
-            ...prev,
-            baseLocation: { lat: data.lat, lng: data.lng }
-          }));
-        }
-      }
-      setIsLoading(false);
-    };
-
     if (deliveryConfig) {
       setLocalConfig(deliveryConfig);
       setIsLoading(false);
@@ -64,7 +71,7 @@ export default function LogisticsSettings() {
     const newRadius: DeliveryRadius = {
       id: Math.random().toString(36).substr(2, 9),
       maxDistance: 5,
-      fee: 10
+      feePerKm: 2.5
     };
     setLocalConfig({
       ...localConfig,
@@ -144,6 +151,45 @@ export default function LogisticsSettings() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Base Location Info */}
+        <div className="lg:col-span-2 bg-white border border-black/5 rounded-[32px] p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+           <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-2xl ${localConfig.baseLocation.lat !== 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                 <MapPin className="w-6 h-6" />
+              </div>
+              <div>
+                 <p className="text-xs font-bold text-ink-muted uppercase">Ponto de Partida (Geolocalização)</p>
+                 <p className="text-sm font-bold text-ink">
+                    {localConfig.baseLocation.lat !== 0 
+                      ? `${localConfig.baseLocation.lat.toFixed(6)}, ${localConfig.baseLocation.lng.toFixed(6)}` 
+                      : 'Não configurado'}
+                 </p>
+              </div>
+           </div>
+           
+           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+             <div className="flex items-center gap-3 bg-oat rounded-2xl px-4 py-2 border border-black/5 w-full sm:w-auto">
+               <div className="text-left">
+                 <p className="text-[9px] font-bold text-ink-muted uppercase">Frete grátis apartir de (R$)</p>
+                 <input 
+                   type="number"
+                   value={localConfig.freeDeliveryThreshold || ''}
+                   onChange={e => setLocalConfig({...localConfig, freeDeliveryThreshold: parseFloat(e.target.value) || 0})}
+                   placeholder="Ex: 100"
+                   className="bg-transparent border-none focus:ring-0 text-sm font-bold text-brand p-0 w-24"
+                 />
+               </div>
+             </div>
+             <button 
+               onClick={syncBaseLocation}
+               className="px-4 py-2 bg-oat border border-black/5 rounded-xl text-xs font-bold text-ink-muted hover:bg-black/5 hover:text-ink transition-all flex items-center gap-2 w-full sm:w-auto justify-center"
+             >
+               <RefreshCw className="w-3 h-3" />
+               Atualizar do Perfil da Loja
+             </button>
+           </div>
+        </div>
+
         {/* Distance Ranges */}
         <section className="space-y-6">
           <div className="bg-white border border-black/5 rounded-[32px] p-8 shadow-sm h-full">
@@ -190,13 +236,13 @@ export default function LogisticsSettings() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-ink-muted uppercase">Taxa (R$)</label>
+                          <label className="text-[10px] font-bold text-ink-muted uppercase">R$ p/ Km</label>
                           <input 
                             type="number"
-                            value={radius.fee}
-                            onChange={(e) => updateRadius(radius.id, 'fee', parseFloat(e.target.value) || 0)}
+                            value={radius.feePerKm}
+                            onChange={(e) => updateRadius(radius.id, 'feePerKm', parseFloat(e.target.value) || 0)}
                             className="w-full bg-white border border-black/5 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-brand"
-                            step="0.5"
+                            step="0.1"
                           />
                         </div>
                       </div>
@@ -216,7 +262,7 @@ export default function LogisticsSettings() {
               <AlertCircle className="w-4 h-4 text-brand shrink-0 mt-0.5" />
               <p className="text-[10px] text-brand-dark font-medium leading-relaxed">
                 O sistema calculará a distância em linha reta (Haversine) do endereço da loja até o cliente. 
-                Será aplicada a taxa do primeiro raio que for maior ou igual à distância calculada.
+                Será aplicado o <strong>valor por Km</strong> da faixa correspondente multiplicado pela distância total.
               </p>
             </div>
           </div>

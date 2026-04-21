@@ -21,7 +21,7 @@ export function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lo
 export interface DeliveryRadius {
   id: string;
   maxDistance: number;
-  fee: number;
+  feePerKm: number;
 }
 
 export interface PeakHourRule {
@@ -36,17 +36,26 @@ export interface DeliveryConfig {
   radii: DeliveryRadius[];
   peakHours: PeakHourRule[];
   baseLocation: { lat: number; lng: number };
+  freeDeliveryThreshold?: number;
 }
 
-export function getDeliveryFeeCalculation(distanceKm: number, config: DeliveryConfig): number {
+export function getDeliveryFeeCalculation(distanceKm: number, config: DeliveryConfig, cartTotal: number = 0): number {
   if (!config || !config.radii || config.radii.length === 0) return 0;
+  
+  // Check for free delivery threshold
+  if (config.freeDeliveryThreshold && config.freeDeliveryThreshold > 0 && cartTotal >= config.freeDeliveryThreshold) {
+    return 0;
+  }
   
   const sortedRadii = [...config.radii].sort((a, b) => a.maxDistance - b.maxDistance);
   const radius = sortedRadii.find(r => distanceKm <= r.maxDistance);
   
-  if (!radius) return sortedRadii[sortedRadii.length - 1].fee;
+  if (!radius) {
+    const lastRadius = sortedRadii[sortedRadii.length - 1];
+    return lastRadius.feePerKm * distanceKm;
+  }
   
-  let fee = radius.fee;
+  let fee = radius.feePerKm * distanceKm;
   
   const now = new Date();
   const day = now.getDay();
