@@ -1,5 +1,22 @@
 {
   "entities": {
+    "menuItem": {
+      "title": "Menu Item",
+      "description": "A product available in the menu",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "image": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "trackStock": { "type": "boolean" },
+        "stockQuantity": { "type": "number" },
+        "extras": { "type": "array" }
+      },
+      "required": ["name", "price", "category", "isActive"]
+    },
     "staff": {
       "title": "Staff Member",
       "description": "Authorized staff member (Waiter, Driver, Porter)",

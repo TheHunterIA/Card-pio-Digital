@@ -21,6 +21,8 @@ export default function MenuSettings() {
     category: 'Lanches',
     price: 0,
     image: '',
+    trackStock: false,
+    stockQuantity: 0,
     extras: [] as MenuItemExtra[]
   });
 
@@ -187,7 +189,7 @@ export default function MenuSettings() {
   const handleCloseForm = () => {
     setIsAddingMode(false);
     setEditingId(null);
-    setFormItem({ name: '', description: '', category: 'Lanches', price: 0, image: '', extras: [] });
+    setFormItem({ name: '', description: '', category: 'Lanches', price: 0, image: '', trackStock: false, stockQuantity: 0, extras: [] });
     setNewExtra({ name: '', price: 0 });
   };
 
@@ -199,6 +201,8 @@ export default function MenuSettings() {
       category: item.category,
       price: item.price,
       image: item.image,
+      trackStock: item.trackStock || false,
+      stockQuantity: item.stockQuantity || 0,
       extras: item.extras || []
     });
     setIsAddingMode(true);
@@ -345,18 +349,45 @@ export default function MenuSettings() {
                       className="w-full bg-oat border-2 border-transparent rounded-xl p-3 text-sm focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 focus:bg-white font-medium placeholder-gray-400 transition-all"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-display font-bold text-ink-muted mb-1.5 uppercase tracking-widest">Preço Sugerido (R$) *</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand font-display font-bold text-sm">R$</span>
-                      <input 
-                        type="number" 
-                        value={formItem.price || ''}
-                        onChange={(e) => setFormItem({...formItem, price: parseFloat(e.target.value) || 0})}
-                        placeholder="0.00"
-                        className="w-full bg-oat border-2 border-transparent rounded-xl p-3 pl-9 text-sm focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 focus:bg-white font-mono font-bold transition-all"
-                        step="0.10"
-                      />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-display font-bold text-ink-muted mb-1.5 uppercase tracking-widest">Preço Sugerido (R$) *</label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand font-display font-bold text-sm">R$</span>
+                        <input 
+                          type="number" 
+                          value={formItem.price || ''}
+                          onChange={(e) => setFormItem({...formItem, price: parseFloat(e.target.value) || 0})}
+                          placeholder="0.00"
+                          className="w-full bg-oat border-2 border-transparent rounded-xl p-3 pl-9 text-sm focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 focus:bg-white font-mono font-bold transition-all"
+                          step="0.10"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-display font-bold text-ink-muted mb-1.5 uppercase tracking-widest">Controle de Estoque</label>
+                      <div className="flex items-center gap-3 h-[48px]">
+                        <button
+                          type="button"
+                          onClick={() => setFormItem({...formItem, trackStock: !formItem.trackStock})}
+                          className={`flex-1 h-full rounded-xl px-4 flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+                            formItem.trackStock 
+                              ? 'bg-brand text-white shadow-lg shadow-brand/20' 
+                              : 'bg-oat text-ink-muted hover:bg-black/5'
+                          }`}
+                        >
+                          {formItem.trackStock ? 'Ativo' : 'Inativo'}
+                        </button>
+                        {formItem.trackStock && (
+                          <input 
+                            type="number"
+                            value={formItem.stockQuantity}
+                            onChange={(e) => setFormItem({...formItem, stockQuantity: parseInt(e.target.value) || 0})}
+                            placeholder="Qtd"
+                            className="w-20 h-full bg-oat border-2 border-transparent rounded-xl p-3 text-sm focus:outline-none focus:border-brand text-center font-mono font-bold transition-all"
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -523,6 +554,15 @@ export default function MenuSettings() {
                         <span className="px-2 py-0.5 bg-oat text-[9px] text-ink-muted rounded-full font-bold uppercase tracking-tighter border border-black/5">
                           {item.category}
                         </span>
+                        {item.trackStock && (
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter border ${
+                            item.stockQuantity && item.stockQuantity > 0 
+                              ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                              : 'bg-red-50 text-red-600 border-red-100'
+                          }`}>
+                            Estoque: {item.stockQuantity}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-ink-muted w-32 sm:w-64 truncate font-medium">{item.description}</p>
                     </div>

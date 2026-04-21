@@ -1,4 +1,4 @@
-import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, onSnapshot, getDocs, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, onSnapshot, getDocs, getDoc, runTransaction } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { handleFirestoreError } from './firebaseError';
 import { MenuItem, Order, OrderStatus, PaymentMethod, useStore, CartItem, DeliveryConfig } from '../store';
@@ -177,32 +177,12 @@ export async function placeOrder(paymentMethod: PaymentMethod, deliveryFee: numb
   // Sync profile before order
   await syncClientProfile();
 
-  // Increment coupon usage if exists
-  if (state.couponCode && user) {
-    const usageId = `${user.uid}_${state.couponCode}`;
-    const usageRef = doc(db, 'couponUsage', usageId);
-    const usageSnap = await getDoc(usageRef);
-    if (usageSnap.exists()) {
-      await updateDoc(usageRef, {
-          count: usageSnap.data().count + 1,
-          updatedAt: serverTimestamp()
-      });
-    } else {
-      await setDoc(usageRef, {
-          uid: user.uid,
-          code: state.couponCode,
-          count: 1,
-          updatedAt: serverTimestamp()
-      });
-    }
-  }
-
   const deviceId = state.deviceId || 'anonymous-device';
   const sessionId = state.currentSessionId || (state.orderType === 'dine-in' && state.tableNumber ? `table-${state.tableNumber}` : null);
 
   const newOrder = {
     userId: user?.uid || deviceId,
-    deviceId: deviceId, // Explicit device lock
+    deviceId: deviceId, 
     ...(state.whatsapp && state.whatsapp.length >= 8 ? { whatsapp: state.whatsapp } : {}),
     customerName: state.customerName || 'Cliente',
     type: state.orderType,
@@ -227,43 +207,74 @@ export async function placeOrder(paymentMethod: PaymentMethod, deliveryFee: numb
   };
 
   try {
-    // If it's a table order, we also track it in the session
-    if (sessionId) {
-      const sessionRef = doc(db, 'sessions', sessionId);
-      await setDoc(sessionRef, {
-        tableNumber: state.tableNumber,
-        status: 'open',
-        lastActivity: serverTimestamp(),
-        // Tie original device to session for lock
-        ownerDeviceId: state.deviceId
-      }, { merge: true });
+    // Atomic stock check and update
+    await runTransaction(db, async (transaction) => {
+      // 1. Check & Update Stock
+      for (const cartItem of state.cart) {
+        const itemRef = doc(db, 'menu', cartItem.menuItemId);
+        const itemSnap = await transaction.get(itemRef);
+        
+        if (itemSnap.exists()) {
+          const itemData = itemSnap.data();
+          if (itemData.trackStock) {
+            const currentStock = itemData.stockQuantity || 0;
+            if (currentStock < cartItem.quantity) {
+              throw new Error(`Estoque insuficiente para: ${itemData.name}`);
+            }
+            const newStock = currentStock - cartItem.quantity;
+            transaction.update(itemRef, { 
+              stockQuantity: newStock,
+              isActive: newStock > 0 ? (itemData.isActive ?? true) : false
+            });
+          }
+        }
+      }
 
-      // Add to session subcollection for real-time sync
-      await setDoc(doc(db, 'sessions', sessionId, 'orders', orderId), newOrder);
-      
-      // Also update store to track session
-      state.setCurrentSessionId(sessionId);
-    }
+      // 2. Coupon Usage
+      if (state.couponCode && user) {
+        const usageId = `${user.uid}_${state.couponCode}`;
+        const usageRef = doc(db, 'couponUsage', usageId);
+        const usageSnap = await transaction.get(usageRef);
+        if (usageSnap.exists()) {
+          transaction.update(usageRef, { count: usageSnap.data().count + 1, updatedAt: serverTimestamp() });
+        } else {
+          transaction.set(usageRef, { uid: user.uid, code: state.couponCode, count: 1, updatedAt: serverTimestamp() });
+        }
+      }
 
-    await setDoc(doc(db, 'orders', orderId), newOrder);
-    
-    // Clear cart locally
+      // 3. Create Session tracking if table order
+      if (sessionId) {
+        const sessionRef = doc(db, 'sessions', sessionId);
+        transaction.set(sessionRef, {
+          tableNumber: state.tableNumber,
+          status: 'open',
+          lastActivity: serverTimestamp(),
+          ownerDeviceId: state.deviceId
+        }, { merge: true });
+
+        const sessionOrderRef = doc(db, 'sessions', sessionId, 'orders', orderId);
+        transaction.set(sessionOrderRef, newOrder);
+      }
+
+      // 4. Create Main Order
+      transaction.set(doc(db, 'orders', orderId), newOrder);
+    });
+
+    if (sessionId) state.setCurrentSessionId(sessionId);
     useStore.getState().clearCart();
     useStore.getState().setCurrentOrderId(orderId);
     
-    // Simulate real-time Payment Gateway drop for demo purposes
     if (['pix', 'credit', 'debit'].includes(paymentMethod)) {
       setTimeout(async () => {
-        try {
-          await confirmPayment(orderId);
-        } catch (e) {
-          // ignore automated confirm error if already updated by admin
-        }
+        try { await confirmPayment(orderId); } catch (e) {}
       }, 5000);
     }
-    
     return orderId;
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message && error.message.includes('Estoque insuficiente')) {
+      alert(error.message);
+      throw error;
+    }
     handleFirestoreError(error, 'create', `orders/${orderId}`, auth.currentUser);
     return '';
   }

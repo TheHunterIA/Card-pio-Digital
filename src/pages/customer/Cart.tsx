@@ -13,6 +13,10 @@ export default function Cart() {
     return sum + ((item.item.price + extrasPrice) * item.quantity);
   }, 0);
 
+  const hasOutOfStock = cart.some(item => 
+    item.item.trackStock && (item.item.stockQuantity === undefined || item.item.stockQuantity < item.quantity)
+  );
+
   if (cart.length === 0) {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 text-center">
@@ -73,6 +77,9 @@ export default function Cart() {
                     </button>
                   </div>
                 </div>
+                {cartItem.item.trackStock && (cartItem.item.stockQuantity === undefined || cartItem.item.stockQuantity < cartItem.quantity) && (
+                  <p className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-1 rounded-lg w-fit uppercase mb-2">Esgotado!</p>
+                )}
                 {cartItem.notes && (
                   <p className="text-ink-muted text-xs mt-1.5 mb-0.5 bg-oat px-3 py-2 rounded-xl italic font-medium inline-block w-fit">
                     "{cartItem.notes}"
@@ -101,6 +108,11 @@ export default function Cart() {
 
       <div className="fixed bottom-0 left-0 w-full p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,20px))] z-50 pointer-events-none">
         <div className="max-w-xl mx-auto pointer-events-auto bg-white rounded-[32px] p-4 shadow-[0_20px_40px_-15px_rgba(28,25,23,0.3)] border border-black/5">
+          {hasOutOfStock && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-2xl mb-4 text-[11px] font-bold text-center border border-red-100 uppercase tracking-tight">
+              Alguns itens estão sem estoque. Remova-os para continuar.
+            </div>
+          )}
           <div className="flex justify-between items-center mb-4 px-3">
             <span className="text-ink-muted font-display font-bold uppercase tracking-wider text-xs">Total do pedido</span>
             <span className="text-2xl font-display font-black text-ink">
@@ -109,7 +121,12 @@ export default function Cart() {
           </div>
           <button 
             onClick={() => navigate('/checkout')}
-            className="w-full bg-brand text-white font-display font-bold py-3.5 rounded-full active:scale-95 transition-all flex items-center justify-center gap-2 shadow-md tracking-wide"
+            disabled={hasOutOfStock}
+            className={`w-full font-display font-bold py-3.5 rounded-full active:scale-95 transition-all flex items-center justify-center gap-2 shadow-md tracking-wide ${
+              hasOutOfStock 
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' 
+                : 'bg-brand text-white'
+            }`}
           >
             <span>Confirmar Pagamento</span>
             <ArrowRight className="w-5 h-5" strokeWidth={3} />

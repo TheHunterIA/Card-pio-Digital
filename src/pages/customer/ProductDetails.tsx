@@ -45,7 +45,10 @@ export default function ProductDetails() {
     );
   };
 
+  const isOutOfStock = product.trackStock && (product.stockQuantity === undefined || product.stockQuantity <= 0);
+
   const handleAdd = () => {
+    if (isOutOfStock) return;
     if (isEditing && editId) {
       updateCartItem(editId, product, notes, quantity, selectedExtras);
     } else {
@@ -154,10 +157,17 @@ export default function ProductDetails() {
 
             <button 
               onClick={handleAdd}
-              className="flex-1 bg-brand hover:bg-brand-light text-white font-display font-bold py-4 rounded-2xl active:scale-95 transition-all flex items-center justify-between px-6 shadow-lg shadow-brand/20"
+              disabled={isOutOfStock}
+              className={`flex-1 font-display font-bold py-4 rounded-2xl transition-all flex items-center justify-between px-6 shadow-lg ${
+                isOutOfStock 
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' 
+                  : 'bg-brand hover:bg-brand-light text-white active:scale-95 shadow-brand/20'
+              }`}
             >
-              <span className="tracking-wide text-xs uppercase tracking-widest">{isEditing ? 'Atualizar' : 'Adicionar'}</span>
-              <span className="text-base">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}</span>
+              <span className="tracking-wide text-xs uppercase tracking-widest">
+                {isOutOfStock ? 'Esgotado' : (isEditing ? 'Atualizar' : 'Adicionar')}
+              </span>
+              {!isOutOfStock && <span className="text-base">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}</span>}
             </button>
           </div>
         </div>

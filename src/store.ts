@@ -25,6 +25,8 @@ export interface MenuItem {
   category: string;
   image: string;
   isActive: boolean;
+  trackStock?: boolean;
+  stockQuantity?: number;
   extras?: MenuItemExtra[];
 }
 

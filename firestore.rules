@@ -38,14 +38,16 @@ service cloud.firestore {
     // Validation Blueprint for MenuItem
     function isValidMenuItem(data) {
       return data.keys().hasAll(['name', 'description', 'price', 'category', 'image', 'isActive', 'extras'])
-          && data.keys().size() == 7
+          && (data.keys().size() >= 7 && data.keys().size() <= 9)
           && data.name is string && data.name.size() > 0 && data.name.size() <= 100
           && data.description is string && data.description.size() <= 500
           && data.price is number && data.price >= 0
           && data.category is string && data.category.size() > 0 && data.category.size() <= 50
           && data.image is string && data.image.size() <= 1048576
           && data.isActive is bool
-          && data.extras is list;
+          && data.extras is list
+          && (!('trackStock' in data) || data.trackStock is bool)
+          && (!('stockQuantity' in data) || data.stockQuantity is number);
     }
     
     // Validation Blueprint for Order
