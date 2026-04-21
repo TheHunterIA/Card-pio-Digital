@@ -297,6 +297,23 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'digital-menu-cart',
+      version: 1,
+      migrate: (persistedState: any, version: number) => {
+        if (version === 0) {
+          // If the state is from the old version (unversioned), clear cart and related info
+          // to prevent the reported white screen crashes
+          return {
+            ...persistedState,
+            cart: [],
+            couponCode: '',
+            couponDiscount: 0,
+            isFreeDeliveryCoupon: false,
+            currentOrderId: null,
+            currentSessionId: null
+          };
+        }
+        return persistedState;
+      },
       partialize: (state) => ({
         deviceId: state.deviceId,
         cart: state.cart,

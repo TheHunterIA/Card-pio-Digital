@@ -40,6 +40,11 @@ export default function Checkout() {
   const isFreeDeliveryCoupon = useStore(state => state.isFreeDeliveryCoupon);
   const setIsFreeDeliveryCoupon = useStore(state => state.setIsFreeDeliveryCoupon);
 
+  const total = cart.reduce((sum, item) => {
+    const extrasPrice = (item.selectedExtras || []).reduce((acc, e) => acc + e.price, 0);
+    return sum + (((item.item?.price || 0) + extrasPrice) * item.quantity);
+  }, 0);
+
   // @ts-ignore
   const googleMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -113,7 +118,7 @@ export default function Checkout() {
         setCurrentDeliveryFee(0);
       }
     }
-  }, [customerLocation, storeConfig, orderType, deliveryConfig]);
+  }, [customerLocation, storeConfig, orderType, deliveryConfig, total]);
 
   const applyCoupon = async () => {
     const code = useStore.getState().couponCode;
@@ -233,10 +238,6 @@ export default function Checkout() {
     }
   };
 
-  const total = cart.reduce((sum, item) => {
-    const extrasPrice = (item.selectedExtras || []).reduce((acc, e) => acc + e.price, 0);
-    return sum + ((item.item.price + extrasPrice) * item.quantity);
-  }, 0);
   const discountAmount = total * (couponDiscount / 100);
   const deliveryFeeValue = (orderType === 'delivery' && !isFreeDeliveryCoupon) ? currentDeliveryFee : 0;
   const finalTotal = total - discountAmount + deliveryFeeValue;

@@ -38,7 +38,7 @@ export default function LogisticsSettings() {
     } catch (e) {
       console.error("Sync failed", e);
     } finally {
-      if (!silent) setIsLoading(false);
+      setIsLoading(false);
     }
   };
 

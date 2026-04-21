@@ -10,11 +10,11 @@ export default function Cart() {
 
   const total = cart.reduce((sum, item) => {
     const extrasPrice = (item.selectedExtras || []).reduce((acc, e) => acc + e.price, 0);
-    return sum + ((item.item.price + extrasPrice) * item.quantity);
+    return sum + (((item.item?.price || 0) + extrasPrice) * item.quantity);
   }, 0);
 
   const hasOutOfStock = cart.some(item => 
-    item.item.trackStock && (item.item.stockQuantity === undefined || item.item.stockQuantity < item.quantity)
+    item.item?.trackStock && (item.item?.stockQuantity === undefined || item.item?.stockQuantity < item.quantity)
   );
 
   if (cart.length === 0) {
@@ -49,19 +49,19 @@ export default function Cart() {
               transition={{ delay: idx * 0.05 }}
               className={`p-4 flex gap-4 ${idx !== cart.length - 1 ? 'border-b border-black/5' : ''}`}
             >
-              <div className="w-20 h-20 bg-oat rounded-2xl overflow-hidden flex-shrink-0">
-                <img 
-                  src={cartItem.item.image} 
-                  alt={cartItem.item.name} 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-display font-bold text-ink leading-tight pr-4 text-base">
-                    <span className="text-brand mr-1">{cartItem.quantity}x</span> {cartItem.item.name}
-                  </h3>
+                <div className="w-20 h-20 bg-oat rounded-2xl overflow-hidden flex-shrink-0">
+                  <img 
+                    src={cartItem.item?.image} 
+                    alt={cartItem.item?.name} 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="flex-1 flex flex-col justify-center">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-display font-bold text-ink leading-tight pr-4 text-base">
+                      <span className="text-brand mr-1">{cartItem.quantity}x</span> {cartItem.item?.name || 'Item Removido'}
+                    </h3>
                   <div className="flex -mr-2">
                     <button 
                       onClick={() => navigate(`/produto/${cartItem.menuItemId}?edit=${cartItem.id}`)}
@@ -85,9 +85,9 @@ export default function Cart() {
                     "{cartItem.notes}"
                   </p>
                 )}
-                <div className="font-display font-extrabold text-brand mt-auto text-base">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((cartItem.item.price + (cartItem.selectedExtras || []).reduce((acc, e) => acc + e.price, 0)) * cartItem.quantity)}
-                </div>
+                  <div className="font-display font-extrabold text-brand mt-auto text-base">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(((cartItem.item?.price || 0) + (cartItem.selectedExtras || []).reduce((acc, e) => acc + e.price, 0)) * cartItem.quantity)}
+                  </div>
                 {cartItem.selectedExtras && cartItem.selectedExtras.length > 0 && (
                   <p className="text-[10px] text-brand font-bold mt-1">
                     + {cartItem.selectedExtras.map(e => e.name).join(', ')}
