@@ -18,6 +18,42 @@ export function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lo
   return R * c;
 }
 
+export async function geocodeAddressFallback(address: string, googleKey?: string): Promise<{lat: number, lng: number} | null> {
+  // 1. Try Google Maps API via direct REST Fetch (More reliable than wrappers)
+  if (googleKey) {
+    try {
+      const gRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleKey}`);
+      const gData = await gRes.json();
+      if (gData.status === 'OK' && gData.results && gData.results[0]) {
+        return gData.results[0].geometry.location; // { lat, lng }
+      }
+      console.warn("Google Maps REST API failed with status:", gData.status);
+    } catch (e) {
+      console.error('Google Maps REST fetch failed', e);
+    }
+  }
+
+  // 2. Fallback to OpenStreetMap (Nominatim) - Free, no API key needed
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`, {
+      headers: {
+        'Accept-Language': 'pt-BR,pt;q=0.9'
+      }
+    });
+    const data = await res.json();
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon)
+      };
+    }
+    console.warn("Nominatim returned no results for:", address);
+  } catch (e) {
+    console.error('Nominatim REST fetch failed', e);
+  }
+  return null;
+}
+
 export interface DeliveryRadius {
   id: string;
   maxDistance: number;

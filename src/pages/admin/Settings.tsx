@@ -5,6 +5,7 @@ import { Settings as SettingsIcon, Save, MapPin, Map, RefreshCw, Percent, Trash2
 import { motion } from 'motion/react';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
 import { GoogleMap, useJsApiLoader, Circle, Marker } from '@react-google-maps/api';
+import { geocodeAddressFallback } from '../../lib/utils';
 
 export default function Settings() {
   const [cep, setCep] = useState('');
@@ -72,31 +73,31 @@ export default function Settings() {
   }, []);
 
   const handleGeocodeAddress = async (fullAddress: string, shopNumber: string) => {
-    if (!googleMapsKey || !fullAddress) return;
+    if (!fullAddress) return;
     
     setIsFetchingLocation(true);
     try {
-      // Append number to the address for better accuracy
       const query = shopNumber ? `${fullAddress}, ${shopNumber}` : fullAddress;
-      const results = await geocodeByAddress(query);
-      const latLng = await getLatLng(results[0]);
-      setLat(latLng.lat);
-      setLng(latLng.lng);
-    } catch (e) {
-      if (shopNumber) {
-        try {
-          // Fallback to street only if combining with number confused the Google API
-          const results = await geocodeByAddress(fullAddress);
-          const latLng = await getLatLng(results[0]);
-          setLat(latLng.lat);
-          setLng(latLng.lng);
-          alert('📍 O número exato da loja não foi encontrado no GPS. O mapa foi centralizado na rua. Por favor, clique no mapa abaixo no local exato do estabelecimento para maior precisão.');
-        } catch (e2) {
-          console.error("Geocoding fallback failed", e2);
-        }
-      } else {
-        console.error("Geocoding failed", e);
+      
+      // Try with robust fallback (Google REST -> Nominatim Free)
+      let coords = await geocodeAddressFallback(query, googleMapsKey);
+      
+      if (!coords && shopNumber) {
+         // Fallback to street only if number fails
+         coords = await geocodeAddressFallback(fullAddress, googleMapsKey);
+         if (coords) {
+             alert('📍 O número exato da loja não foi encontrado. O mapa foi centralizado na rua. Por favor, ajuste o pino clicando no local exato do estabelecimento.');
+         }
       }
+
+      if (coords) {
+         setLat(coords.lat);
+         setLng(coords.lng);
+      } else {
+         alert('⚠️ Não conseguimos encontrar este endereço em nenhum provedor de mapas (Google/OSM).');
+      }
+    } catch (e) {
+      console.error("Geocoding failed entirely", e);
     } finally {
       setIsFetchingLocation(false);
     }
@@ -399,9 +400,14 @@ export default function Settings() {
                       selectProps={{
                         value: address ? { label: address, value: address } : null,
                         onChange: async (val: any) => {
-                          if (val) {
+                          if (val && val.label) {
                             setAddress(val.label);
                             await handleGeocodeAddress(val.label, number);
+                          }
+                        },
+                        onInputChange: (inputValue, { action }) => {
+                          if (action === 'input-change') {
+                            setAddress(inputValue);
                           }
                         },
                         placeholder: "Buscar endereço da loja...",

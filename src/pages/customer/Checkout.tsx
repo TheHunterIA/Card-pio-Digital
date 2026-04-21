@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import IdentifyModal from '../../components/IdentifyModal';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import { getDistanceInMeters, getDeliveryFeeCalculation } from '../../lib/utils';
+import { geocodeAddressFallback, getDistanceInMeters, getDeliveryFeeCalculation } from '../../lib/utils';
 import { subscribeToDeliveryConfig } from '../../lib/database';
 
 export default function Checkout() {
@@ -52,15 +52,24 @@ export default function Checkout() {
   const [isFetchingCep, setIsFetchingCep] = useState(false);
 
   const handleGeocodeCustomerAddress = async (street: string, num: string) => {
-    if (!googleMapsKey || !street) return;
+    if (!street) return;
     setIsGeocoding(true);
     try {
       const query = num ? `${street}, ${num}` : street;
-      const results = await geocodeByAddress(query);
-      const latLng = await getLatLng(results[0]);
-      setCustomerLocation(latLng);
+      let coords = await geocodeAddressFallback(query, googleMapsKey);
+      
+      if (!coords && num) {
+         // Fallback to street only if number fails
+         coords = await geocodeAddressFallback(street, googleMapsKey);
+      }
+
+      if (coords) {
+         setCustomerLocation(coords);
+      } else {
+         console.error("Geocoding failed entirely to find customer location");
+      }
     } catch (e) {
-      console.error("Customer geocoding failed", e);
+      console.error("Geocoding unhandled error", e);
     } finally {
       setIsGeocoding(false);
     }
@@ -369,9 +378,19 @@ export default function Checkout() {
                       selectProps={{
                         value: address ? { label: address, value: address } : null,
                         onChange: async (val: any) => {
-                          if (val) {
+                          if (val && val.label) {
                             setAddress(val.label);
                             await handleGeocodeCustomerAddress(val.label, addressNumber);
+                          }
+                        },
+                        onInputChange: (inputValue, { action }) => {
+                          if (action === 'input-change') {
+                            setAddress(inputValue);
+                          }
+                        },
+                        onBlur: () => {
+                          if (address) {
+                            handleGeocodeCustomerAddress(address, addressNumber);
                           }
                         },
                         placeholder: "Buscar endereço...",
