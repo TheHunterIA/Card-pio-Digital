@@ -74,10 +74,11 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
-    if (orderType === 'delivery' && customerLocation && (storeConfig?.lat || deliveryConfig?.baseLocation?.lat)) {
-      const baseLat = deliveryConfig?.baseLocation?.lat || storeConfig?.lat;
-      const baseLng = deliveryConfig?.baseLocation?.lng || storeConfig?.lng;
+    const baseLat = deliveryConfig?.baseLocation?.lat || storeConfig?.lat;
+    const baseLng = deliveryConfig?.baseLocation?.lng || storeConfig?.lng;
+    const hasBaseLocation = baseLat && baseLng && baseLat !== 0;
 
+    if (orderType === 'delivery' && customerLocation && hasBaseLocation) {
       const distanceMeters = getDistanceInMeters(
         customerLocation.lat,
         customerLocation.lng,
@@ -105,7 +106,12 @@ export default function Checkout() {
       }
     } else {
       setIsOutOfRange(false);
-      setCurrentDeliveryFee(0);
+      // Fallback to static fee if we don't have location yet but it's delivery
+      if (orderType === 'delivery') {
+        setCurrentDeliveryFee(storeConfig?.deliveryFee || 0);
+      } else {
+        setCurrentDeliveryFee(0);
+      }
     }
   }, [customerLocation, storeConfig, orderType, deliveryConfig]);
 

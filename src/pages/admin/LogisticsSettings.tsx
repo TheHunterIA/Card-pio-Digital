@@ -49,6 +49,10 @@ export default function LogisticsSettings() {
     if (deliveryConfig) {
       setLocalConfig(deliveryConfig);
       setIsLoading(false);
+      // If deliveryConfig exists but baseLocation is empty, try to sync from main config
+      if (deliveryConfig.baseLocation?.lat === 0 || !deliveryConfig.baseLocation) {
+        syncBaseLocation();
+      }
     } else {
       syncBaseLocation();
     }

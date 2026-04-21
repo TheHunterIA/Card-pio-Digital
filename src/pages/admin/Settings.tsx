@@ -343,18 +343,63 @@ export default function Settings() {
               </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Endereço da Loja</label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder={isFetchingCep ? "Buscando CEP..." : "Rua das Flores, Centro..."}
-                    className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
-                    disabled={isFetchingCep}
-                  />
-                  {isFetchingCep && (
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                      <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                <div className="relative z-50">
+                  {googleMapsKey ? (
+                    <GooglePlacesAutocomplete
+                      apiKey={googleMapsKey}
+                      selectProps={{
+                        value: address ? { label: address, value: address } : null,
+                        onChange: async (val: any) => {
+                          if (val) {
+                            setAddress(val.label);
+                            try {
+                              const results = await geocodeByAddress(val.label);
+                              const latLng = await getLatLng(results[0]);
+                              setLat(latLng.lat);
+                              setLng(latLng.lng);
+                            } catch (e) {
+                              console.error("Geocoding failed", e);
+                            }
+                          }
+                        },
+                        placeholder: "Buscar endereço da loja...",
+                        styles: {
+                          control: (provided) => ({
+                            ...provided,
+                            backgroundColor: '#F5F2ED',
+                            border: '2px solid transparent',
+                            borderRadius: '1rem',
+                            padding: '0.25rem',
+                            boxShadow: 'none',
+                            '&:hover': { border: '2px solid #FF4E00' }
+                          }),
+                          input: (provided) => ({ ...provided, fontFamily: 'Inter', fontWeight: '500' }),
+                          placeholder: (provided) => ({ ...provided, color: '#8E9299', fontSize: '14px' }),
+                          option: (provided, state) => ({
+                            ...provided,
+                            backgroundColor: state.isFocused ? '#FF4E00' : 'white',
+                            color: state.isFocused ? 'white' : '#1C1917',
+                            fontFamily: 'Inter',
+                            fontSize: '14px'
+                          })
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder={isFetchingCep ? "Buscando CEP..." : "Rua das Flores, Centro..."}
+                        className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                        disabled={isFetchingCep}
+                      />
+                      {isFetchingCep && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                          <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
