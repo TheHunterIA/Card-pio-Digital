@@ -47,8 +47,13 @@ export default function Checkout() {
 
   const googleMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
 
+  const [isLocating, setIsLocating] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isFetchingCep, setIsFetchingCep] = useState(false);
+
   const handleGeocodeCustomerAddress = async (street: string, num: string) => {
     if (!googleMapsKey || !street) return;
+    setIsGeocoding(true);
     try {
       const query = num ? `${street}, ${num}` : street;
       const results = await geocodeByAddress(query);
@@ -56,11 +61,10 @@ export default function Checkout() {
       setCustomerLocation(latLng);
     } catch (e) {
       console.error("Customer geocoding failed", e);
+    } finally {
+      setIsGeocoding(false);
     }
   };
-
-  const [isLocating, setIsLocating] = useState(false);
-  const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(requireUpfrontPayment ? 'pix' : null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showIdentify, setShowIdentify] = useState(false);
@@ -73,6 +77,13 @@ export default function Checkout() {
   useEffect(() => {
     const unsub = subscribeToDeliveryConfig();
     return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    // Geocode stored address if location is missing
+    if (address && !customerLocation) {
+      handleGeocodeCustomerAddress(address, addressNumber);
+    }
   }, []);
 
   useEffect(() => {
@@ -230,16 +241,7 @@ export default function Checkout() {
           // Format: Rua, Bairro, Cidade - UF
           const formattedAddress = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`;
           setAddress(formattedAddress);
-          
-          if (googleMapsKey) {
-            try {
-              const results = await geocodeByAddress(formattedAddress);
-              const latLng = await getLatLng(results[0]);
-              setCustomerLocation(latLng);
-            } catch (e) {
-              console.error("Geocoding failed", e);
-            }
-          }
+          await handleGeocodeCustomerAddress(formattedAddress, addressNumber);
         }
       } catch (err) {
         console.error("CEP lookup failed", err);
@@ -533,7 +535,9 @@ export default function Checkout() {
                 <div className="flex justify-between text-sm text-ink-muted">
                   <div className="flex items-center gap-1.5">
                     <span>Taxa de Entrega</span>
-                    {customerLocation && (
+                    {isGeocoding ? (
+                      <span className="text-[10px] text-brand font-bold animate-pulse">Calculando frete...</span>
+                    ) : customerLocation && (
                       <span className="text-[10px] bg-brand/10 text-brand px-1.5 py-0.5 rounded-md font-bold">
                         {((getDistanceInMeters(
                           customerLocation.lat, 
@@ -545,10 +549,10 @@ export default function Checkout() {
                     )}
                   </div>
                   <span className="font-bold text-ink">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentDeliveryFee)}
+                    {isGeocoding ? '---' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentDeliveryFee)}
                   </span>
                 </div>
-                {!customerLocation && address.trim() && (
+                {!isGeocoding && !customerLocation && address.trim() && (
                   <p className="text-[9px] text-amber-600 font-bold flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" />
                     Selecione o endereço sugerido para calcular o frete exato.
@@ -666,10 +670,10 @@ export default function Checkout() {
         <div className="max-w-xl mx-auto pointer-events-auto">
           <button 
             onClick={handleFinish}
-            disabled={!paymentMethod || (orderType === 'delivery' && (!address.trim() || !addressNumber.trim())) || isProcessing || isOutOfRange}
+            disabled={!paymentMethod || (orderType === 'delivery' && (!address.trim() || !addressNumber.trim())) || isProcessing || isOutOfRange || isGeocoding}
             className="w-full h-14 bg-brand disabled:bg-gray-300 disabled:text-gray-500 text-white font-display font-bold rounded-full active:scale-95 transition-all text-base flex items-center justify-center shadow-[0_20px_40px_-15px_rgba(255,78,0,0.5)] disabled:shadow-none tracking-wide"
           >
-            {isProcessing ? (
+            {isProcessing || isGeocoding ? (
               <motion.div 
                 animate={{ rotate: 360 }} 
                 transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'urban-prime-pwa-v2';
+const CACHE_NAME = 'urban-prime-pwa-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -18,14 +18,15 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
+  // Use Network First strategy for all requests to ensure updates are visible
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
     })
   );
 });
