@@ -18,6 +18,7 @@ export default function Settings() {
   const [lng, setLng] = useState<number | null>(null);
   
   const [isFetchingCep, setIsFetchingCep] = useState(false);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -70,6 +71,24 @@ export default function Settings() {
     loadConfig();
   }, []);
 
+  const handleGeocodeAddress = async (fullAddress: string, shopNumber: string) => {
+    if (!googleMapsKey || !fullAddress) return;
+    
+    setIsFetchingLocation(true);
+    try {
+      // Append number to the address for better accuracy
+      const query = shopNumber ? `${fullAddress}, ${shopNumber}` : fullAddress;
+      const results = await geocodeByAddress(query);
+      const latLng = await getLatLng(results[0]);
+      setLat(latLng.lat);
+      setLng(latLng.lng);
+    } catch (e) {
+      console.error("Geocoding failed", e);
+    } finally {
+      setIsFetchingLocation(false);
+    }
+  };
+
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '').substring(0, 8);
     setCep(value);
@@ -83,17 +102,7 @@ export default function Settings() {
         if (!data.erro) {
           const formattedAddress = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`;
           setAddress(formattedAddress);
-          
-          if (googleMapsKey) {
-            try {
-              const results = await geocodeByAddress(formattedAddress);
-              const latLng = await getLatLng(results[0]);
-              setLat(latLng.lat);
-              setLng(latLng.lng);
-            } catch (e) {
-              console.error("Geocoding failed", e);
-            }
-          }
+          await handleGeocodeAddress(formattedAddress, number);
         }
       } catch (err) {
         console.error('ViaCEP Error:', err);
@@ -351,13 +360,21 @@ export default function Settings() {
 
               <div className="md:col-span-1">
                 <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Número</label>
-                <input 
-                  type="text" 
-                  value={number}
-                  onChange={(e) => setNumber(e.target.value)}
-                  placeholder="Ex: 123"
-                  className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
-                />
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    onBlur={() => handleGeocodeAddress(address, number)}
+                    placeholder="Ex: 123"
+                    className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                  />
+                  {isFetchingLocation && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="md:col-span-2">
