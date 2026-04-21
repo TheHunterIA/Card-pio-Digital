@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Settings as SettingsIcon, Save, MapPin, Map, RefreshCw, Percent, Trash2, X, Bike, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, Save, MapPin, Map, RefreshCw, Percent, Trash2, X, Bike, AlertTriangle, Search } from 'lucide-react';
 import { motion } from 'motion/react';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
 import { GoogleMap, useJsApiLoader, Circle, Marker } from '@react-google-maps/api';
@@ -476,14 +476,28 @@ export default function Settings() {
                         alert('Seu navegador não suporta GPS.');
                       }
                     }}
-                    className="flex-1 w-full bg-black text-white text-xs font-bold py-2 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-black/80 transition-colors active:scale-95"
+                    className="flex-1 w-full bg-black text-white text-xs font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-black/80 transition-colors active:scale-95"
                   >
                     <MapPin className="w-4 h-4" />
-                    Usar Meu GPS Atual (Forçar Coordenadas)
+                    Extrair pelo GPS do Aparelho
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => handleGeocodeAddress(address, number)}
+                    disabled={!address || isFetchingLocation}
+                    className="flex-1 w-full bg-brand text-white text-xs font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-brand-dark transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isFetchingLocation ? (
+                       <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                       <Search className="w-4 h-4" />
+                    )}
+                    Forçar Busca pelo Endereço
                   </button>
                 </div>
                 
-                <p className="text-[10px] text-ink-muted px-1 mt-2">Ao preencher o endereço ou CEP, o sistema tenta capturar automaticamente a localização. Se falhar, use o GPS acima.</p>
+                <p className="text-[10px] text-ink-muted px-1 mt-2">Ao preencher o endereço ou CEP, o sistema tenta capturar automaticamente a localização. Se falhar, use o GPS ou a busca forçada acima.</p>
               </div>
             </div>
 
