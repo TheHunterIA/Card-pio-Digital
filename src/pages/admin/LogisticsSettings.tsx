@@ -25,14 +25,16 @@ export default function LogisticsSettings() {
       const configSnap = await getDoc(doc(db, 'settings', 'config'));
       if (configSnap.exists()) {
         const data = configSnap.data();
-        if (data.lat && data.lng) {
+        if (data.lat && data.lng && data.lat !== 0) {
           setLocalConfig(prev => ({
             ...prev,
             baseLocation: { lat: data.lat, lng: data.lng }
           }));
           if (!silent) {
-            alert('Coordenadas sincronizadas!');
+            alert('📍 Coordenadas sincronizadas do perfil da loja!');
           }
+        } else if (!silent) {
+          alert('⚠️ O perfil da loja não possui coordenadas válidas. Por favor, selecione seu endereço nas Configurações Gerais.');
         }
       }
     } catch (e) {
@@ -160,16 +162,23 @@ export default function LogisticsSettings() {
         {/* Base Location Info */}
         <div className="lg:col-span-2 bg-white border border-black/5 rounded-[32px] p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-2xl ${localConfig.baseLocation.lat !== 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+              <div className={`p-3 rounded-2xl ${localConfig.baseLocation.lat !== 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-oat text-ink-muted'}`}>
                  <MapPin className="w-6 h-6" />
               </div>
               <div>
-                 <p className="text-xs font-bold text-ink-muted uppercase">Ponto de Partida (Geolocalização)</p>
-                 <p className="text-sm font-bold text-ink">
-                    {localConfig.baseLocation.lat !== 0 
-                      ? `${localConfig.baseLocation.lat.toFixed(6)}, ${localConfig.baseLocation.lng.toFixed(6)}` 
-                      : 'Não configurado'}
-                 </p>
+                 <p className="text-xs font-bold text-ink-muted uppercase">Ponto de Partida</p>
+                 <div className="flex flex-col">
+                   <p className="text-sm font-bold text-ink">
+                      {localConfig.baseLocation.lat !== 0 
+                        ? `${localConfig.baseLocation.lat.toFixed(6)}, ${localConfig.baseLocation.lng.toFixed(6)}` 
+                        : 'Coordenadas não vinculadas'}
+                   </p>
+                   {localConfig.baseLocation.lat === 0 && (
+                     <p className="text-[10px] text-ink-muted leading-tight mt-1 max-w-[200px]">
+                       Para frete por Km, selecione seu endereço nas <strong>Configurações Gerais</strong>.
+                     </p>
+                   )}
+                 </div>
               </div>
            </div>
            

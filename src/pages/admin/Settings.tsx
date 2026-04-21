@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Settings as SettingsIcon, Save, MapPin, Map, RefreshCw, Percent, Trash2, X, Bike } from 'lucide-react';
+import { Settings as SettingsIcon, Save, MapPin, Map, RefreshCw, Percent, Trash2, X, Bike, AlertTriangle } from 'lucide-react';
 import { motion } from 'motion/react';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
 import { GoogleMap, useJsApiLoader, Circle, Marker } from '@react-google-maps/api';
@@ -329,7 +329,7 @@ export default function Settings() {
           </div>
 
           <div className="space-y-4 pt-6 border-t border-black/5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="md:col-span-1">
                 <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">CEP</label>
                 <div className="relative">
@@ -348,8 +348,20 @@ export default function Settings() {
                   )}
                 </div>
               </div>
+
+              <div className="md:col-span-1">
+                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Número</label>
+                <input 
+                  type="text" 
+                  value={number}
+                  onChange={(e) => setNumber(e.target.value)}
+                  placeholder="Ex: 123"
+                  className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                />
+              </div>
+
               <div className="md:col-span-2">
-                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Endereço da Loja</label>
+                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Endereço / Logradouro</label>
                 <div className="relative z-50">
                   {googleMapsKey ? (
                     <GooglePlacesAutocomplete
@@ -404,6 +416,19 @@ export default function Settings() {
                     </div>
                   )}
                 </div>
+                {address && (!lat || !lng) && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-3 p-3 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[11px] font-bold text-red-900 leading-tight">Coordenadas não capturadas!</p>
+                      <p className="text-[10px] text-red-700 leading-tight mt-0.5">O endereço foi digitado manualmente mas o GPS não o reconheceu. <strong>Selecione o endereço na lista de sugestões</strong> ou use o mapa abaixo para marcar o local exato.</p>
+                    </div>
+                  </motion.div>
+                )}
                 <p className="text-[10px] text-ink-muted px-1 mt-2">Ao preencher o endereço ou CEP, o sistema captura automaticamente a localização para o cálculo de frete.</p>
               </div>
             </div>
