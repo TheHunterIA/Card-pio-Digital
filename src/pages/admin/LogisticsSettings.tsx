@@ -18,26 +18,28 @@ export default function LogisticsSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const syncBaseLocation = async () => {
+  const syncBaseLocation = async (silent = false) => {
     // Try to get base location from main config first
-    setIsLoading(true);
-    const configSnap = await getDoc(doc(db, 'settings', 'config'));
-    if (configSnap.exists()) {
-      const data = configSnap.data();
-      if (data.lat && data.lng) {
-        setLocalConfig(prev => ({
-          ...prev,
-          baseLocation: { lat: data.lat, lng: data.lng }
-        }));
-        // If we are coming from a notification or manual click, we alert
-        if (!isLoading) {
-          alert('Coordenadas sincronizadas com o perfil da loja!');
+    if (!silent) setIsLoading(true);
+    try {
+      const configSnap = await getDoc(doc(db, 'settings', 'config'));
+      if (configSnap.exists()) {
+        const data = configSnap.data();
+        if (data.lat && data.lng) {
+          setLocalConfig(prev => ({
+            ...prev,
+            baseLocation: { lat: data.lat, lng: data.lng }
+          }));
+          if (!silent) {
+            alert('Coordenadas sincronizadas!');
+          }
         }
-      } else {
-        alert('Localização não encontrada no perfil da loja. Configure o endereço em "Geral" primeiro.');
       }
+    } catch (e) {
+      console.error("Sync failed", e);
+    } finally {
+      if (!silent) setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -51,10 +53,10 @@ export default function LogisticsSettings() {
       setIsLoading(false);
       // If deliveryConfig exists but baseLocation is empty, try to sync from main config
       if (deliveryConfig.baseLocation?.lat === 0 || !deliveryConfig.baseLocation) {
-        syncBaseLocation();
+        syncBaseLocation(true);
       }
     } else {
-      syncBaseLocation();
+      syncBaseLocation(true);
     }
   }, [deliveryConfig]);
 
@@ -185,7 +187,7 @@ export default function LogisticsSettings() {
                </div>
              </div>
              <button 
-               onClick={syncBaseLocation}
+               onClick={() => syncBaseLocation(false)}
                className="px-4 py-2 bg-oat border border-black/5 rounded-xl text-xs font-bold text-ink-muted hover:bg-black/5 hover:text-ink transition-all flex items-center gap-2 w-full sm:w-auto justify-center"
              >
                <RefreshCw className="w-3 h-3" />
@@ -368,22 +370,6 @@ export default function LogisticsSettings() {
           </div>
         </section>
       </div>
-
-      {localConfig.baseLocation.lat === 0 && (
-         <motion.div 
-           initial={{ opacity: 0, y: 30 }}
-           animate={{ opacity: 1, y: 0 }}
-           className="mt-8 p-6 bg-red-50 border border-red-100 rounded-[32px] flex items-center gap-4"
-         >
-            <div className="w-12 h-12 bg-red-500 text-white rounded-full flex items-center justify-center shrink-0">
-               <MapPin className="w-6 h-6" />
-            </div>
-            <div>
-               <h4 className="text-red-900 font-display font-bold">Localização da Loja não encontrada</h4>
-               <p className="text-red-700 text-sm font-medium">Para o cálculo de distância funcionar, você precisa configurar o endereço da sua loja na aba de <strong>Configurações Gerais</strong> primeiro.</p>
-            </div>
-         </motion.div>
-      )}
     </div>
   );
 }

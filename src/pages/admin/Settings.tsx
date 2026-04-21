@@ -332,14 +332,21 @@ export default function Settings() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-1">
                 <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">CEP</label>
-                <input 
-                  type="text" 
-                  value={cep}
-                  onChange={handleCepChange}
-                  placeholder="00000-000"
-                  maxLength={9}
-                  className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-mono transition-all text-sm"
-                />
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    value={cep}
+                    onChange={handleCepChange}
+                    placeholder="00000-000"
+                    maxLength={9}
+                    className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-mono transition-all text-sm"
+                  />
+                  {isFetchingCep && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Endereço da Loja</label>
@@ -391,18 +398,13 @@ export default function Settings() {
                         type="text" 
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
-                        placeholder={isFetchingCep ? "Buscando CEP..." : "Rua das Flores, Centro..."}
+                        placeholder="Nome da Rua / Logradouro"
                         className="w-full bg-oat border-2 border-transparent rounded-2xl p-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
-                        disabled={isFetchingCep}
                       />
-                      {isFetchingCep && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                          <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
+                <p className="text-[10px] text-ink-muted px-1 mt-2">Ao preencher o endereço ou CEP, o sistema captura automaticamente a localização para o cálculo de frete.</p>
               </div>
             </div>
 
@@ -433,6 +435,30 @@ export default function Settings() {
               </div>
             </div>
 
+            <div className="flex items-center justify-between gap-4 mt-2">
+              <button 
+                onClick={() => {
+                  if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition((pos) => {
+                      setLat(pos.coords.latitude);
+                      setLng(pos.coords.longitude);
+                      alert('Coordenadas capturadas da sua posição atual!');
+                    }, (err) => {
+                      console.error(err);
+                      alert('Não foi possível obter sua localização. Verifique as permissões do navegador.');
+                    });
+                  }
+                }}
+                className="text-[10px] font-bold text-brand uppercase tracking-widest bg-brand/5 px-4 py-2 rounded-xl hover:bg-brand/10 transition-all flex items-center gap-2"
+              >
+                <MapPin className="w-3 h-3" /> Usar minha localização atual
+              </button>
+              
+              <p className="text-[9px] text-ink-muted font-bold uppercase italic">
+                Você também pode clicar no mapa para ajustar o pino
+              </p>
+            </div>
+
             {/* Coordinates Status block */}
             <div className={`mt-4 p-4 rounded-2xl border flex items-center gap-3 ${lat && lng ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-oat border-black/5 text-ink-muted'}`}>
               <Map className={`w-5 h-5 shrink-0 ${lat && lng ? 'text-emerald-500' : ''}`} />
@@ -455,6 +481,12 @@ export default function Settings() {
                   mapContainerStyle={{ width: '100%', height: '100%' }}
                   center={{ lat, lng }}
                   zoom={deliveryRadiusKm > 0 ? (deliveryRadiusKm > 10 ? 11 : 13) : 15}
+                  onClick={(e) => {
+                    if (e.latLng) {
+                      setLat(e.latLng.lat());
+                      setLng(e.latLng.lng());
+                    }
+                  }}
                   options={{
                     disableDefaultUI: true,
                     zoomControl: true,
