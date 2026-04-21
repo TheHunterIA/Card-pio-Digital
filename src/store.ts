@@ -49,6 +49,9 @@ export interface Order {
   addressNumber?: string;
   addressComplement?: string;
   items: CartItem[];
+  subtotal: number;
+  discount: number;
+  deliveryFee?: number;
   total: number;
   status: OrderStatus;
   paymentMethod?: PaymentMethod;
@@ -65,11 +68,35 @@ export interface Order {
   customerLocation?: { lat: number; lng: number };
 }
 
+export interface DeliveryRadius {
+  id: string;
+  maxDistance: number; // km
+  fee: number;
+}
+
+export interface PeakHourRule {
+  id: string;
+  dayOfWeek: number; // 0-6
+  startHour: string; // HH:mm
+  endHour: string; // HH:mm
+  feeMultiplier: number;
+}
+
+export interface DeliveryConfig {
+  radii: DeliveryRadius[];
+  peakHours: PeakHourRule[];
+  baseLocation: { lat: number; lng: number };
+}
+
 interface AppState {
   deviceId: string;
   // Menu
   menu: MenuItem[];
   setMenu: (menu: MenuItem[]) => void;
+  
+  // Delivery Settings
+  deliveryConfig: DeliveryConfig | null;
+  setDeliveryConfig: (config: DeliveryConfig) => void;
   
   // Cart & Customer Session
   customerName: string;
@@ -252,6 +279,9 @@ export const useStore = create<AppState>()(
   setCouponCode: (code) => set({ couponCode: code }),
   couponDiscount: 0,
   setCouponDiscount: (discount) => set({ couponDiscount: discount }),
+
+  deliveryConfig: null,
+  setDeliveryConfig: (deliveryConfig) => set({ deliveryConfig }),
 
   currentSessionId: null,
   setCurrentSessionId: (id) => set({ currentSessionId: id }),

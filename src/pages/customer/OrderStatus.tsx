@@ -422,8 +422,14 @@ export default function OrderStatus() {
           <div className="pt-6 border-t border-black/5">
              <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Subtotal</span>
-                <span className="text-lg font-display font-black text-ink">R$ {((order as any).subtotal || (order.total + ((order as any).discount || 0))).toFixed(2)}</span>
+                <span className="text-lg font-display font-black text-ink">R$ {((order as any).subtotal || (order.total + ((order as any).discount || 0) - (order.deliveryFee || 0))).toFixed(2)}</span>
              </div>
+             {order.deliveryFee > 0 && (
+                <div className="flex justify-between items-center mb-2 text-ink-muted">
+                   <span className="text-xs font-bold uppercase tracking-wider">Taxa de Entrega</span>
+                   <span className="text-sm font-display font-black">R$ {(order.deliveryFee).toFixed(2)}</span>
+                </div>
+              )}
              {(order as any).discount > 0 && (
                <div className="flex justify-between items-center mb-2 text-emerald-600">
                   <span className="text-xs font-bold uppercase tracking-wider">Desconto Aplicado</span>

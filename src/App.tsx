@@ -16,6 +16,7 @@ import KDS from './pages/admin/KDS';
 import MenuSettings from './pages/admin/MenuSettings';
 import FleetMap from './pages/admin/FleetMap';
 import TeamManagement from './pages/admin/TeamManagement';
+import LogisticsSettings from './pages/admin/LogisticsSettings';
 import QRCodes from './pages/admin/QRCodes';
 import Customers from './pages/admin/Customers';
 import Settings from './pages/admin/Settings';
@@ -66,6 +67,7 @@ export default function App() {
             <Route index element={<Navigate to="/admin/kds" replace />} />
             <Route path="kds" element={<KDS />} />
             <Route path="cardapio" element={<MenuSettings />} />
+            <Route path="logistica" element={<LogisticsSettings />} />
             <Route path="frota" element={<FleetMap />} />
             <Route path="equipe" element={<TeamManagement />} />
             <Route path="entregadores" element={<Navigate to="/admin/equipe" replace />} />

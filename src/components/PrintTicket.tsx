@@ -66,6 +66,9 @@ export default function PrintTicket({ order, config, isVisitor, tableNumber, vis
           </div>
 
           <div className="text-right mb-6">
+            {order.deliveryFee > 0 && (
+              <p className="text-[10px]">Taxa de Entrega: R$ {order.deliveryFee.toFixed(2)}</p>
+            )}
             <p className="text-base font-bold uppercase">Total: R$ {order.total.toFixed(2)}</p>
             <p className="text-[10px]">{order.paymentStatus === 'paid' ? 'PAGAMENTO CONFIRMADO' : 'PENDENTE DE PAGAMENTO'}</p>
           </div>

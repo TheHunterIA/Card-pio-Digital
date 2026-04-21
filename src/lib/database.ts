@@ -1,7 +1,7 @@
 import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, onSnapshot, getDocs, getDoc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { handleFirestoreError } from './firebaseError';
-import { MenuItem, Order, OrderStatus, PaymentMethod, useStore, CartItem } from '../store';
+import { MenuItem, Order, OrderStatus, PaymentMethod, useStore, CartItem, DeliveryConfig } from '../store';
 
 // Set up listeners that directly sync into the Zustand store
 export function subscribeToMenu() {
@@ -56,6 +56,26 @@ export function subscribeToOrders() {
   }, (error) => {
     console.error("Orders sync error:", error);
   });
+}
+
+export function subscribeToDeliveryConfig() {
+  if (!db) return () => {};
+  const ref = doc(db, 'settings', 'delivery');
+  return onSnapshot(ref, (snapshot) => {
+    if (snapshot.exists()) {
+      useStore.getState().setDeliveryConfig(snapshot.data() as DeliveryConfig);
+    }
+  }, (error) => {
+    console.error("Delivery config sync error:", error);
+  });
+}
+
+export async function updateDeliveryConfig(config: DeliveryConfig) {
+  try {
+    await setDoc(doc(db, 'settings', 'delivery'), config);
+  } catch (error) {
+    handleFirestoreError(error, 'update', 'settings/delivery', auth.currentUser);
+  }
 }
 
 // Menu Actions
@@ -142,7 +162,7 @@ export function subscribeToSession(sessionId: string) {
 }
 
 // Order Actions
-export async function placeOrder(paymentMethod: PaymentMethod): Promise<string> {
+export async function placeOrder(paymentMethod: PaymentMethod, deliveryFee: number = 0): Promise<string> {
   const state = useStore.getState();
   const user = auth.currentUser;
   const orderId = Math.random().toString(36).substr(2, 9).toUpperCase();
@@ -152,7 +172,7 @@ export async function placeOrder(paymentMethod: PaymentMethod): Promise<string> 
     return sum + ((c.item.price + extrasPrice) * c.quantity);
   }, 0);
   const discount = subtotal * (state.couponDiscount / 100);
-  const total = subtotal - discount;
+  const total = subtotal - discount + deliveryFee;
   
   // Sync profile before order
   await syncClientProfile();
@@ -195,6 +215,7 @@ export async function placeOrder(paymentMethod: PaymentMethod): Promise<string> 
     items: state.cart,
     subtotal,
     discount,
+    deliveryFee,
     couponCode: state.couponCode || null,
     total,
     status: 'na-fila',

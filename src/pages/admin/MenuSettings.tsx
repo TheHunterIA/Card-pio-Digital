@@ -31,6 +31,19 @@ export default function MenuSettings() {
   const downloadTemplate = () => {
     const ws = XLSX.utils.json_to_sheet([
       {
+        "Nome do Produto": "Combo Smash 1",
+        "Descriçao": "Smash Burger + Batata Frita Média + Refrigerante Lata.",
+        "Preço": 45.90,
+        "Categoria": "Combos",
+        "URL da Imagem (Opcional)": "https://images.unsplash.com/photo-1594212600000-880436af392b?auto=format&fit=crop&q=80&w=800&h=600",
+        "Extra 1: Nome": "Turbinar Batata",
+        "Extra 1: Preço": 7.00,
+        "Extra 2: Nome": "Maionese Artesanal",
+        "Extra 2: Preço": 4.00,
+        "Extra 3: Nome": "",
+        "Extra 3: Preço": ""
+      },
+      {
         "Nome do Produto": "Cheeseburger Duplo",
         "Descriçao": "Pão brioche, duas carnes de 100g, muito queijo e molho especial.",
         "Preço": 35.90,
@@ -82,11 +95,16 @@ export default function MenuSettings() {
 
           const defaultImage = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800&h=600';
 
+          const rawCategory = row["Categoria"] ? String(row["Categoria"]).trim() : "Lanches";
+          // Normalize to capitalized if it matches one of our main ones
+          const categories = ["Combos", "Lanches", "Acompanhamentos", "Bebidas", "Sobremesas"];
+          const category = categories.find(c => c.toLowerCase() === rawCategory.toLowerCase()) || rawCategory;
+
           await addMenuItem({
             name: String(row["Nome do Produto"]),
             description: row["Descriçao"] ? String(row["Descriçao"]) : "",
             price: parseFloat(row["Preço"]),
-            category: row["Categoria"] ? String(row["Categoria"]) : "Lanches",
+            category: category,
             image: row["URL da Imagem (Opcional)"] ? String(row["URL da Imagem (Opcional)"]) : defaultImage,
             extras: extras
           });
@@ -483,7 +501,17 @@ export default function MenuSettings() {
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
-              {menu.map(item => (
+              {[...menu].sort((a, b) => {
+                const order = ['Combos', 'Lanches', 'Acompanhamentos', 'Bebidas', 'Sobremesas'];
+                const indexA = order.indexOf(a.category);
+                const indexB = order.indexOf(b.category);
+                
+                if (indexA !== -1 && indexB !== -1 && indexA !== indexB) return indexA - indexB;
+                if (indexA !== -1 && indexB === -1) return -1;
+                if (indexA === -1 && indexB !== -1) return 1;
+                
+                return a.name.localeCompare(b.name);
+              }).map(item => (
                 <tr key={item.id} className="hover:bg-oat/50 transition-colors group">
                   <td className="p-5">
                     <img src={item.image} alt={item.name} className="w-14 h-14 rounded-2xl object-cover bg-oat border border-black/5 shadow-sm" />

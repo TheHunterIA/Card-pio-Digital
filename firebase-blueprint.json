@@ -23,9 +23,51 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "code", "count", "updatedAt"]
+    },
+    "deliverySettings": {
+      "title": "Delivery Settings",
+      "description": "Radius-based fees and peak hour rules",
+      "type": "object",
+      "properties": {
+        "radii": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "maxDistance": { "type": "number" },
+              "fee": { "type": "number" }
+            }
+          }
+        },
+        "peakHours": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "dayOfWeek": { "type": "number" },
+              "startHour": { "type": "string" },
+              "endHour": { "type": "string" },
+              "feeMultiplier": { "type": "number" }
+            }
+          }
+        },
+        "baseLocation": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        }
+      }
     }
   },
   "firestore": {
+    "/settings/delivery": {
+      "schema": "deliverySettings",
+      "description": "Advanced delivery fee configurations."
+    },
     "/authorized_staff/{email}": {
       "schema": "staff",
       "description": "Whitelist of authorized staff members and their roles."

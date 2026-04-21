@@ -98,6 +98,16 @@ export default function AdminLayout() {
           </NavLink>
 
           <NavLink 
+            to="/admin/logistica" 
+            className={({isActive}) => `flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all group ${
+              isActive ? 'bg-brand text-white shadow-md' : 'text-ink-muted hover:text-ink hover:bg-oat border border-transparent'
+            }`}
+          >
+            <Truck className={`w-6 h-6 transition-transform ${({isActive}) => isActive ? '' : 'group-hover:scale-110'}`} strokeWidth={2.5} />
+            <span className="font-display font-bold tracking-wide">Logística</span>
+          </NavLink>
+
+          <NavLink 
             to="/admin/frota" 
             className={({isActive}) => `flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all group ${
               isActive ? 'bg-brand text-white shadow-md' : 'text-ink-muted hover:text-ink hover:bg-oat border border-transparent'
@@ -243,6 +253,17 @@ export default function AdminLayout() {
                 >
                   <BookOpen className="w-5 h-5" />
                   <span className="text-[10px] uppercase tracking-wide">Cardápio</span>
+                </NavLink>
+
+                <NavLink 
+                  to="/admin/logistica" 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={({isActive}) => `flex items-center gap-3 p-4 rounded-2xl border transition-all ${
+                    isActive ? 'bg-brand text-white border-brand shadow-md' : 'bg-oat border-black/5 text-ink font-bold'
+                  }`}
+                >
+                  <Truck className="w-5 h-5" />
+                  <span className="text-[10px] uppercase tracking-wide">Logística</span>
                 </NavLink>
 
                 <NavLink 

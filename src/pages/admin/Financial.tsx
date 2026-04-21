@@ -10,7 +10,7 @@ import { motion } from 'motion/react';
 import { 
   TrendingUp, DollarSign, ShoppingBag, Users, Calendar, 
   ArrowUpRight, ArrowDownRight, Coffee, Pizza, Beer, Package, ChevronDown, AlertCircle,
-  CreditCard, Smartphone, Banknote, ShieldCheck, QrCode
+  CreditCard, Smartphone, Banknote, ShieldCheck, QrCode, Motorbike
 } from 'lucide-react';
 import { format, startOfDay, endOfDay, subDays, isWithinInterval, parseISO, startOfMonth, endOfMonth, isAfter, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -69,6 +69,7 @@ export default function Financial() {
   const stats = useMemo(() => {
     const finishedFiltered = finishedOrders.filter(o => o.status === 'finalizado');
     const totalRevenue = finishedFiltered.reduce((acc, o) => acc + (o.total || 0), 0);
+    const totalDeliveryRevenue = finishedFiltered.reduce((acc, o) => acc + (o.deliveryFee || 0), 0);
     
     // Audit Portaria: Compare all table orders with those that actually cleared the gate
     const sessionOrders = finishedOrders.filter(o => o.type === 'dine-in');
@@ -110,6 +111,7 @@ export default function Financial() {
       totalFees,
       totalNet,
       avgTicket,
+      totalDeliveryRevenue,
       totalOrders: finishedFiltered.length || 0,
       activeOrders: orders.filter(o => o.status !== 'finalizado' && o.status !== 'cancelado').length || 0,
       gateLeakage: pendingGate.length,
@@ -307,6 +309,14 @@ export default function Financial() {
            icon={ShoppingBag}
            trend="+18%"
            isPositive={true}
+         />
+         <StatsCard 
+           title="Taxa de Entrega Total" 
+           value={formatCurrency(stats.totalDeliveryRevenue)} 
+           subtitle="Receita de entregas"
+           icon={Motorbike}
+           neutral
+           color="text-emerald-600"
          />
          <StatsCard 
            title="Taxa de Saída (Gate)" 

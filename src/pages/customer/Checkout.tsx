@@ -9,7 +9,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import IdentifyModal from '../../components/IdentifyModal';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import { getDistanceInMeters } from '../../lib/utils';
+import { getDistanceInMeters, getDeliveryFeeCalculation } from '../../lib/utils';
+import { subscribeToDeliveryConfig } from '../../lib/database';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function Checkout() {
   const setCep = useStore(state => state.setCep);
   const setCustomerLocation = useStore(state => state.setCustomerLocation);
   const customerLocation = useStore(state => state.customerLocation);
+  const deliveryConfig = useStore(state => state.deliveryConfig);
   const tableNumber = useStore(state => state.tableNumber);
   const setTableNumber = useStore(state => state.setTableNumber);
   const customerName = useStore(state => state.customerName);
@@ -48,6 +50,12 @@ export default function Checkout() {
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [storeConfig, setStoreConfig] = useState<any>(null);
   const [isOutOfRange, setIsOutOfRange] = useState(false);
+  const [currentDeliveryFee, setCurrentDeliveryFee] = useState(0);
+
+  useEffect(() => {
+    const unsub = subscribeToDeliveryConfig();
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -64,19 +72,40 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
-    if (orderType === 'delivery' && storeConfig?.deliveryGeoEnabled && customerLocation && storeConfig.lat && storeConfig.lng) {
+    if (orderType === 'delivery' && customerLocation && (storeConfig?.lat || deliveryConfig?.baseLocation?.lat)) {
+      const baseLat = deliveryConfig?.baseLocation?.lat || storeConfig?.lat;
+      const baseLng = deliveryConfig?.baseLocation?.lng || storeConfig?.lng;
+
       const distanceMeters = getDistanceInMeters(
         customerLocation.lat,
         customerLocation.lng,
-        storeConfig.lat,
-        storeConfig.lng
+        baseLat,
+        baseLng
       );
-      const limitMeters = (storeConfig.deliveryRadiusKm || 5) * 1000;
-      setIsOutOfRange(distanceMeters > limitMeters);
+      
+      const distanceKm = distanceMeters / 1000;
+
+      // 1. Check Range Limit
+      if (storeConfig?.deliveryGeoEnabled) {
+        const limitKm = storeConfig.deliveryRadiusKm || 5;
+        setIsOutOfRange(distanceKm > limitKm);
+      } else {
+        setIsOutOfRange(false);
+      }
+
+      // 2. Calculate Dynamic Fee
+      if (deliveryConfig && deliveryConfig.radii.length > 0) {
+        const dynamicFee = getDeliveryFeeCalculation(distanceKm, deliveryConfig);
+        setCurrentDeliveryFee(dynamicFee);
+      } else {
+        // Fallback to static fee in storeConfig
+        setCurrentDeliveryFee(storeConfig?.deliveryFee || 0);
+      }
     } else {
       setIsOutOfRange(false);
+      setCurrentDeliveryFee(0);
     }
-  }, [customerLocation, storeConfig, orderType]);
+  }, [customerLocation, storeConfig, orderType, deliveryConfig]);
 
   const applyCoupon = async () => {
     const code = useStore.getState().couponCode;
@@ -199,7 +228,8 @@ export default function Checkout() {
     return sum + ((item.item.price + extrasPrice) * item.quantity);
   }, 0);
   const discountAmount = total * (couponDiscount / 100);
-  const finalTotal = total - discountAmount;
+  const deliveryFeeValue = orderType === 'delivery' ? currentDeliveryFee : 0;
+  const finalTotal = total - discountAmount + deliveryFeeValue;
 
   const handleGetLocation = () => {
     setIsLocating(true);
@@ -227,7 +257,8 @@ export default function Checkout() {
     }
 
     setIsProcessing(true);
-    await placeOrder(paymentMethod);
+    const feeToCharge = orderType === 'delivery' ? currentDeliveryFee : 0;
+    await placeOrder(paymentMethod, feeToCharge);
     navigate('/status', { replace: true });
   };
 
@@ -473,6 +504,12 @@ export default function Checkout() {
               <div className="flex justify-between text-sm text-emerald-600 font-medium">
                 <span>Desconto</span>
                 <span>-{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(discountAmount)}</span>
+              </div>
+            )}
+            {orderType === 'delivery' && (
+              <div className="flex justify-between text-sm text-ink-muted">
+                <span>Taxa de Entrega</span>
+                <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentDeliveryFee)}</span>
               </div>
             )}
             <div className="pt-3 border-t border-black/5 flex justify-between items-center">
