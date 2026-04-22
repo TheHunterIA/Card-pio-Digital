@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { finalizeOrder } from '../../lib/database';
 import { motion, AnimatePresence } from 'motion/react';
@@ -54,7 +54,7 @@ export default function PorterDashboard() {
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Expected token: UP_PASS_{ORDER_ID}_{TIMESTAMP}
+    // Expected token: UP_PASS_{ORDER_ID}_{TIMESTAMP} or UP_PASS_TABLE_{TABLE_ID}_{TIMESTAMP}
     if (!text.startsWith('UP_PASS_')) {
       setError('Código Inválido: Formato não reconhecido.');
       setValidating(false);
@@ -76,7 +76,6 @@ export default function PorterDashboard() {
       }
 
       try {
-        // Check if this specific token has been used
         const tokenRef = doc(db, 'usedTokens', text);
         const tokenSnap = await getDoc(tokenRef);
 
@@ -86,12 +85,7 @@ export default function PorterDashboard() {
           return;
         }
 
-        // Mark as used
-        await setDoc(tokenRef, {
-          usedAt: serverTimestamp(),
-          tableId,
-          saltPart
-        });
+        await setDoc(tokenRef, { usedAt: serverTimestamp(), tableId, saltPart });
         setScanResult({
           id: `VISITOR-${tableId}-${saltPart}`,
           customerName: 'Visitante (Consumo Zero)',
@@ -103,6 +97,73 @@ export default function PorterDashboard() {
       } catch (e) {
         console.error(e);
         setError('Erro ao validar token de visitante.');
+      } finally {
+        setValidating(false);
+      }
+      return;
+    }
+
+    // Check for Full Table Pass: UP_PASS_TABLE_{TABLE_ID}_{TIMESTAMP}
+    if (text.startsWith('UP_PASS_TABLE_')) {
+      const tableId = parts[3];
+      const datePart = parts[4];
+
+      if (datePart !== today) {
+         setError('Código Expirado: Este código é de outro dia.');
+         setValidating(false);
+         return;
+      }
+
+      try {
+        // Query all active orders for this table
+        const q = query(
+          collection(db, 'orders'),
+          where('tableNumber', '==', tableId),
+          where('status', 'not-in', ['finalizado', 'cancelado'])
+        );
+        const snap = await getDocs(q);
+        
+        if (snap.empty) {
+          setError(`Mesa ${tableId} não possui comandas ativas.`);
+          setValidating(false);
+          return;
+        }
+
+        // Check if ANY of the table's orders are pending payment
+        let hasPending = false;
+        let totalVal = 0;
+        snap.forEach(d => {
+          totalVal += d.data().total;
+          if (d.data().paymentStatus !== 'paid') {
+            hasPending = true;
+          }
+        });
+
+        if (hasPending) {
+          setError('Atenção: Existem pedidos PENDENTES DE PAGAMENTO nesta Mesa.');
+          setScanResult({
+            id: `TABLE-${tableId}`,
+            customerName: `Mesa ${tableId} (Agrupado)`,
+            tableNumber: tableId,
+            total: totalVal,
+            isValid: false,
+            error: 'PENDENTE DE PAGAMENTO'
+          });
+        } else {
+          // Apenas valida que está tudo pago, sem finalizar no banco.
+          // O garçom decide se limpa ou deixa a mesa aberta para os clientes voltarem.
+          setScanResult({
+            id: `TABLE-${tableId}`,
+            customerName: `Mesa ${tableId} (Pagamentos OK)`,
+            tableNumber: tableId,
+            total: totalVal,
+            isValid: true,
+            warning: 'Aviso: Esta validação não encerra a mesa definitivamente no sistema. Se os clientes foram embora permanentemente, o Garçom pode fechar a fatura.'
+          });
+        }
+      } catch (e) {
+        console.error(e);
+        setError('Falha ao processar comandos da mesa.');
       } finally {
         setValidating(false);
       }
@@ -126,13 +187,38 @@ export default function PorterDashboard() {
       } else {
         const orderData = orderDoc.data();
         if (orderData.paymentStatus === 'paid') {
-           // Finalize order upon successful scan
-           await finalizeOrder(orderId);
+           let warningMsg = null;
+           // Check the rest of the table if applicable
+           if (orderData.tableNumber) {
+               const tableQ = query(
+                 collection(db, 'orders'), 
+                 where('tableNumber', '==', orderData.tableNumber), 
+                 where('status', 'not-in', ['finalizado', 'cancelado'])
+               );
+               const tableSnap = await getDocs(tableQ);
+               
+               let unpaidCount = 0;
+               let unpaidTotal = 0;
+
+               tableSnap.forEach(d => {
+                   if (d.id !== orderId) {
+                       if (d.data().paymentStatus !== 'paid') {
+                           unpaidCount++;
+                           unpaidTotal += d.data().total;
+                       }
+                   }
+               });
+
+               if (unpaidCount > 0) {
+                   warningMsg = `RESTAM ${unpaidCount} PEDIDO(S) NÃO PAGOS NA MESA ${orderData.tableNumber} (Total: R$ ${unpaidTotal.toFixed(2)}). VERIFIQUE SE O CLIENTE É O ÚLTIMO NA MESA.`;
+               }
+           }
 
           setScanResult({
             id: orderDoc.id,
             ...orderData,
-            isValid: true
+            isValid: true,
+            warning: warningMsg
           });
           // Optionally mark as "already used" in a real production sys
         } else {
@@ -258,6 +344,13 @@ export default function PorterDashboard() {
                 }`}>
                   {scanResult.isVisitor ? 'VISITANTE - CONSUMO ZERO' : (scanResult.isValid ? 'SAÍDA AUTORIZADA' : scanResult.error)}
                 </p>
+
+                {scanResult.warning && (
+                  <div className="bg-amber-100/50 border border-amber-200 text-amber-800 p-4 rounded-2xl mb-6 text-xs font-bold uppercase tracking-widest text-left flex gap-3">
+                    <ShieldAlert className="w-5 h-5 shrink-0 text-amber-600" />
+                    <span>{scanResult.warning}</span>
+                  </div>
+                )}
 
                 {/* Details Card */}
                 <div className="bg-white rounded-3xl p-6 shadow-sm border border-black/5 text-left space-y-4">

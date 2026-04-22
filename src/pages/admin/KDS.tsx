@@ -48,7 +48,15 @@ export default function KDS() {
   ];
 
   const handleNextStatus = (order: Order) => {
-    if (order.status === 'na-fila') updateOrderStatus(order.id, 'preparando');
+    if (order.status === 'na-fila') {
+      updateOrderStatus(order.id, 'preparando');
+      // Pergunta se deseja imprimir a via da cozinha ao iniciar o preparo
+      setTimeout(() => {
+        if (window.confirm('Deseja imprimir a comanda térmica para a cozinha do pedido de ' + (order.customerName || 'Cliente') + '?')) {
+          handlePrint(order);
+        }
+      }, 100);
+    }
     else if (order.status === 'preparando') {
       if (order.type === 'delivery') updateOrderStatus(order.id, 'pronto-entrega');
       else updateOrderStatus(order.id, 'saiu-entrega');

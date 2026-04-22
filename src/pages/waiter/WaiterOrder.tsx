@@ -17,15 +17,27 @@ export default function WaiterOrder() {
   const clearCart = useStore(state => state.clearCart);
   const waiterName = useStore(state => state.waiterName);
   const orders = useStore(state => state.orders);
+  const setTableNumber = useStore(state => state.setTableNumber);
+  const setCustomerName = useStore(state => state.setCustomerName);
+  const setOrderType = useStore(state => state.setOrderType);
 
   const [search, setSearch] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [selectedItemForNotes, setSelectedItemForNotes] = useState<any>(null);
   const [notes, setNotes] = useState('');
+  const [customerNameInput, setCustomerNameInput] = useState('');
   const [submittedOrder, setSubmittedOrder] = useState<Order | null>(null);
   const [showPrint, setShowPrint] = useState(false);
   
+  useEffect(() => {
+    // Whenever this mounts or tableId changes, prepare store variables
+    if (tableId) {
+      setTableNumber(tableId);
+      setOrderType('dine-in');
+    }
+  }, [tableId, setTableNumber, setOrderType]);
+
   useEffect(() => {
     if (showPrint) {
       const timer = setTimeout(() => {
@@ -61,14 +73,16 @@ export default function WaiterOrder() {
   const handleSendToKDS = async () => {
     if (cart.length === 0) return;
     setIsSubmitting(true);
+    // Explicitly sync the local customerNameInput exactly before placing the order
+    setCustomerName(customerNameInput || 'Cliente da Mesa');
+
     try {
       const orderId = await placeOrder('na-entrega');
-      // Find the order in the list (it should be there via snapshot)
-      // Since it's a demo, we might need a small delay or look it up
-      // Or just create a mock order object from the cart for printing
       const orderData = orders.find(o => o.id === orderId);
       setSubmittedOrder(orderData || null);
       setShowCart(false);
+      clearCart();
+      setCustomerNameInput(''); // prepare for next order
     } catch (err) {
       console.error(err);
       alert('Erro ao enviar pedido.');
@@ -312,7 +326,7 @@ export default function WaiterOrder() {
                 </button>
               </div>
 
-              <div className="space-y-4 mb-8">
+              <div className="space-y-4 mb-6">
                 {cart.map(item => (
                   <div key={item.id} className="flex items-center justify-between py-2 border-b border-black/5">
                     <div className="flex items-center gap-4">
@@ -332,6 +346,17 @@ export default function WaiterOrder() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="mb-8">
+                <label className="block text-xs font-display font-bold text-ink-muted uppercase tracking-wider mb-2">Identificação do Cliente (Opcional)</label>
+                <input 
+                  type="text"
+                  placeholder="Ex: João (Camisa Azul)"
+                  value={customerNameInput}
+                  onChange={e => setCustomerNameInput(e.target.value)}
+                  className="w-full bg-oat border-2 border-transparent rounded-2xl py-4 px-4 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 text-ink font-medium transition-all text-sm"
+                />
               </div>
 
               <div className="flex flex-col gap-3">

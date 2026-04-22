@@ -20,6 +20,8 @@ export default function WaiterBill() {
   const [printingVisitor, setPrintingVisitor] = useState<{ id: string, salt: string } | null>(null);
   const [showPrint, setShowPrint] = useState(false);
 
+  const [printingOrder, setPrintingOrder] = useState<any>(null); // holds the specific order to print
+
   useEffect(() => {
     return onSnapshot(doc(db, 'settings', 'config'), (snap) => {
       if (snap.exists()) setConfig(snap.data());
@@ -38,12 +40,25 @@ export default function WaiterBill() {
   const exitPassToken = combinedOrderId ? `UP_PASS_${combinedOrderId}_${new Date().toISOString().split('T')[0]}` : '';
 
   const handlePrintOrder = () => {
-    if (!order) return;
+    if (tableOrders.length === 0) return;
     setPrintingVisitor(null);
+    setPrintingOrder(tableOrders[0]); // General print takes the first one as primary
     setShowPrint(true);
     setTimeout(() => {
       window.print();
       setShowPrint(false);
+      setPrintingOrder(null);
+    }, 500);
+  };
+
+  const handlePrintIndividualOrder = (orderToPrint: any) => {
+    setPrintingVisitor(null);
+    setPrintingOrder(orderToPrint);
+    setShowPrint(true);
+    setTimeout(() => {
+      window.print();
+      setShowPrint(false);
+      setPrintingOrder(null);
     }, 500);
   };
 
@@ -79,9 +94,9 @@ export default function WaiterBill() {
           config={config} 
         />
       )}
-      {showPrint && order && (
+      {showPrint && printingOrder && (
         <PrintTicket 
-          order={order}
+          order={printingOrder}
           config={config} 
         />
       )}
@@ -181,25 +196,35 @@ export default function WaiterBill() {
               <div key={order.id} className="bg-white p-6 rounded-[32px] border-2 border-black/5 shadow-sm group hover:border-brand/20 transition-all">
                 <div className="flex justify-between items-start border-b border-black/5 pb-4 mb-4">
                   <div>
-                    <p className="font-display font-black text-ink uppercase tracking-tight">Pedido #{order.id.slice(0, 4)}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <h3 className="font-display font-black text-ink uppercase tracking-tight text-lg mb-1">{order.customerName || 'Cliente'}</h3>
+                    <p className="font-mono text-ink-muted text-xs font-bold uppercase tracking-widest">Pedido #{order.id.slice(0, 4)}</p>
+                    <div className="flex items-center gap-2 mt-2">
                       <span className={`w-2 h-2 rounded-full ${order.status === 'preparando' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
                       <span className="text-[10px] font-black uppercase text-ink-muted tracking-widest">{order.status}</span>
                     </div>
                   </div>
                   
-                  {order.paymentStatus === 'pending' ? (
+                  <div className="flex flex-col gap-2 items-end">
+                    {order.paymentStatus === 'pending' ? (
+                      <button 
+                        onClick={() => markManualPayment(order.id)}
+                        className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                      >
+                        <CheckCircle2 className="w-4 h-4" /> Pago (Dinheiro)
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest">
+                        <CheckCircle2 className="w-4 h-4" /> Pago
+                      </span>
+                    )}
+
                     <button 
-                      onClick={() => markManualPayment(order.id)}
-                      className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                      onClick={() => handlePrintIndividualOrder(order)}
+                      className="flex items-center gap-2 text-ink-muted bg-oat px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-ink hover:text-white transition-all shadow-sm mt-2"
                     >
-                      <CheckCircle2 className="w-4 h-4" /> Pago (Dinheiro/Débito)
+                      <Printer className="w-4 h-4" /> Imprimir 
                     </button>
-                  ) : (
-                    <span className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest">
-                      <CheckCircle2 className="w-4 h-4" /> Pago
-                    </span>
-                  )}
+                  </div>
                 </div>
                 
                 <ul className="space-y-4">
