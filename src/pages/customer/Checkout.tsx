@@ -600,94 +600,103 @@ export default function Checkout() {
         <div>
           <h2 className="font-display font-bold text-ink mb-4 px-1 text-lg tracking-tight">Forma de Pagamento</h2>
           <div className="space-y-4">
-            <button 
-              onClick={() => setPaymentMethod('pix')}
-              className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
-                paymentMethod === 'pix' 
-                ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
-                : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
-              }`}
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'pix' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
-                <QrCode className="w-6 h-6" strokeWidth={2.5} />
-              </div>
-              <div className="text-left flex-1">
-                <h3 className="font-display font-bold text-ink text-base">PIX</h3>
-                <p className="text-brand text-sm font-semibold tracking-wide">Aprovação imediata</p>
-              </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'pix' ? 'border-brand bg-white' : 'border-black/10'}`}>
-                {paymentMethod === 'pix' && <div className="w-3 h-3 bg-brand rounded-full" />}
-              </div>
-            </button>
+            
+            {storeConfig?.acceptedPaymentMethods?.pix !== false && (
+              <button 
+                onClick={() => setPaymentMethod('pix')}
+                className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                  paymentMethod === 'pix' 
+                  ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
+                  : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'pix' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
+                  <QrCode className="w-6 h-6" strokeWidth={2.5} />
+                </div>
+                <div className="text-left flex-1">
+                  <h3 className="font-display font-bold text-ink text-base">PIX</h3>
+                  <p className="text-brand text-sm font-semibold tracking-wide">Aprovação imediata</p>
+                </div>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'pix' ? 'border-brand bg-white' : 'border-black/10'}`}>
+                  {paymentMethod === 'pix' && <div className="w-3 h-3 bg-brand rounded-full" />}
+                </div>
+              </button>
+            )}
 
-            <button 
-              onClick={() => setPaymentMethod('credit')}
-              className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
-                paymentMethod === 'credit' 
-                ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
-                : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
-              }`}
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'credit' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
-                <CreditCard className="w-6 h-6" strokeWidth={2.5} />
-              </div>
-              <div className="text-left flex-1">
-                <h3 className="font-display font-bold text-ink text-base">Cartão de Crédito</h3>
-                <p className="text-emerald-600 text-sm font-semibold tracking-wide">Digital (Simulação)</p>
-              </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'credit' ? 'border-brand bg-white' : 'border-black/10'}`}>
-                {paymentMethod === 'credit' && <div className="w-3 h-3 bg-brand rounded-full" />}
-              </div>
-            </button>
+            {storeConfig?.acceptedPaymentMethods?.credit !== false && (
+              <button 
+                onClick={() => setPaymentMethod('credit')}
+                className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                  paymentMethod === 'credit' 
+                  ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
+                  : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'credit' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
+                  <CreditCard className="w-6 h-6" strokeWidth={2.5} />
+                </div>
+                <div className="text-left flex-1">
+                  <h3 className="font-display font-bold text-ink text-base">Cartão de Crédito</h3>
+                  <p className="text-emerald-600 text-sm font-semibold tracking-wide">Digital (Simulação)</p>
+                </div>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'credit' ? 'border-brand bg-white' : 'border-black/10'}`}>
+                  {paymentMethod === 'credit' && <div className="w-3 h-3 bg-brand rounded-full" />}
+                </div>
+              </button>
+            )}
 
-            <button 
-              onClick={() => setPaymentMethod('debit')}
-              className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
-                paymentMethod === 'debit' 
-                ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
-                : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
-              }`}
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'debit' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
-                <Smartphone className="w-6 h-6" strokeWidth={2.5} />
-              </div>
-              <div className="text-left flex-1">
-                <h3 className="font-display font-bold text-ink text-base">Cartão de Débito</h3>
-                <p className="text-emerald-600 text-sm font-semibold tracking-wide">Digital (Simulação)</p>
-              </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'debit' ? 'border-brand bg-white' : 'border-black/10'}`}>
-                {paymentMethod === 'debit' && <div className="w-3 h-3 bg-brand rounded-full" />}
-              </div>
-            </button>
+            {storeConfig?.acceptedPaymentMethods?.debit !== false && (
+              <button 
+                onClick={() => setPaymentMethod('debit')}
+                className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                  paymentMethod === 'debit' 
+                  ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
+                  : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'debit' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
+                  <Smartphone className="w-6 h-6" strokeWidth={2.5} />
+                </div>
+                <div className="text-left flex-1">
+                  <h3 className="font-display font-bold text-ink text-base">Cartão de Débito</h3>
+                  <p className="text-emerald-600 text-sm font-semibold tracking-wide">Digital (Simulação)</p>
+                </div>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'debit' ? 'border-brand bg-white' : 'border-black/10'}`}>
+                  {paymentMethod === 'debit' && <div className="w-3 h-3 bg-brand rounded-full" />}
+                </div>
+              </button>
+            )}
 
-            <button 
-              onClick={() => {
-                if (requireUpfrontPayment) return;
-                setPaymentMethod('na-entrega');
-              }}
-              disabled={requireUpfrontPayment}
-              className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
-                requireUpfrontPayment ? 'opacity-40 cursor-not-allowed bg-oat border-black/5' : 
-                paymentMethod === 'na-entrega' 
-                ? 'border-ink bg-ink text-white shadow-[0_8px_20px_-6px_rgba(28,25,23,0.3)]' 
-                : 'border-black/5 bg-white hover:border-black/10 text-ink shadow-sm'
-              }`}
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'na-entrega' ? 'bg-white/10 text-white' : 'bg-oat text-ink border border-black/5'}`}>
-                <Banknote className="w-6 h-6" strokeWidth={2.5} />
-              </div>
-              <div className="text-left flex-1">
-                <h3 className={`font-display font-bold text-base ${paymentMethod === 'na-entrega' ? 'text-white' : 'text-ink'}`}>
-                  {orderType === 'dine-in' ? 'Pagar no Caixa' : 'Pagar na Entrega'}
-                </h3>
-                <p className={`text-sm font-medium ${paymentMethod === 'na-entrega' ? 'text-white/70' : 'text-ink-muted'}`}>
-                  {requireUpfrontPayment ? 'Indisponível (Valid. Endereço)' : 'Cartão ou Dinheiro'}
-                </p>
-              </div>
-              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'na-entrega' ? 'border-white bg-transparent' : 'border-black/10'}`}>
-                {paymentMethod === 'na-entrega' && <div className="w-3 h-3 bg-white rounded-full" />}
-              </div>
-            </button>
+            {storeConfig?.acceptedPaymentMethods?.['na-entrega'] !== false && (
+              <button 
+                onClick={() => {
+                  if (requireUpfrontPayment) return;
+                  setPaymentMethod('na-entrega');
+                }}
+                disabled={requireUpfrontPayment}
+                className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                  requireUpfrontPayment ? 'opacity-40 cursor-not-allowed bg-oat border-black/5' : 
+                  paymentMethod === 'na-entrega' 
+                  ? 'border-ink bg-ink text-white shadow-[0_8px_20px_-6px_rgba(28,25,23,0.3)]' 
+                  : 'border-black/5 bg-white hover:border-black/10 text-ink shadow-sm'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'na-entrega' ? 'bg-white/10 text-white' : 'bg-oat text-ink border border-black/5'}`}>
+                  <Banknote className="w-6 h-6" strokeWidth={2.5} />
+                </div>
+                <div className="text-left flex-1">
+                  <h3 className={`font-display font-bold text-base ${paymentMethod === 'na-entrega' ? 'text-white' : 'text-ink'}`}>
+                    {orderType === 'dine-in' ? 'Pagar no Caixa' : 'Pagar na Entrega'}
+                  </h3>
+                  <p className={`text-sm font-medium ${paymentMethod === 'na-entrega' ? 'text-white/70' : 'text-ink-muted'}`}>
+                    {requireUpfrontPayment ? 'Indisponível (Valid. Endereço)' : 'Cartão ou Dinheiro'}
+                  </p>
+                </div>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'na-entrega' ? 'border-white bg-transparent' : 'border-black/10'}`}>
+                  {paymentMethod === 'na-entrega' && <div className="w-3 h-3 bg-white rounded-full" />}
+                </div>
+              </button>
+            )}
           </div>
         </div>
 

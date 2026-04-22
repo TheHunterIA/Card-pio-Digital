@@ -34,6 +34,13 @@ export default function Settings() {
   const [newLimit, setNewLimit] = useState('');
   const [newCouponType, setNewCouponType] = useState<'percentage' | 'free_delivery'>('percentage');
 
+  const [acceptedPaymentMethods, setAcceptedPaymentMethods] = useState({
+    pix: true,
+    credit: true,
+    debit: true,
+    'na-entrega': true
+  });
+
   // @ts-ignore
   const googleMapsKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -62,6 +69,9 @@ export default function Settings() {
           setDebitFee(data.debitFee ?? 1.99);
           setDeliveryFee(data.deliveryFee ?? 3.50);
           setCoupons(data.coupons || {});
+          if (data.acceptedPaymentMethods) {
+            setAcceptedPaymentMethods(data.acceptedPaymentMethods);
+          }
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
@@ -145,6 +155,7 @@ export default function Settings() {
         debitFee,
         deliveryFee,
         coupons,
+        acceptedPaymentMethods,
         updatedAt: new Date().toISOString()
       }, { merge: true });
       
@@ -302,6 +313,36 @@ export default function Settings() {
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 text-ink-muted font-bold">%</div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Module: Accepted Payment Methods */}
+        <div className="bg-white border border-black/5 rounded-3xl p-6 shadow-sm">
+          <h3 className="text-lg font-display font-bold text-ink flex items-center gap-2 mb-2">
+            <Percent className="w-5 h-5 text-brand" />
+            Métodos de Pagamento Aceitos
+          </h3>
+          <p className="text-ink-muted text-sm mb-6 max-w-lg">
+            Defina quais formas de pagamento estarão disponíveis para o cliente no checkout.
+          </p>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {Object.entries({
+              pix: 'PIX',
+              credit: 'Móvel Crédito',
+              debit: 'Móvel Débito',
+              'na-entrega': 'Dinheiro (Na Entrega)'
+            }).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-3 p-4 rounded-2xl border-2 border-black/5 hover:border-brand/40 cursor-pointer transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={acceptedPaymentMethods[key as keyof typeof acceptedPaymentMethods]}
+                  onChange={(e) => setAcceptedPaymentMethods(prev => ({ ...prev, [key]: e.target.checked }))}
+                  className="w-5 h-5 rounded text-brand focus:ring-brand bg-oat border-black/10"
+                />
+                <span className="font-bold text-sm text-ink">{label}</span>
+              </label>
+            ))}
           </div>
         </div>
 

@@ -57,6 +57,25 @@ export default function KDS() {
     else if (order.status === 'saiu-entrega' || order.status === 'em-rota') updateOrderStatus(order.id, 'finalizado');
   };
 
+  const handleCancelOrder = (order: Order) => {
+    if (window.confirm(`Tem certeza que deseja CANCELAR o pedido de ${order.customerName}? Essa ação não pode ser desfeita.`)) {
+      updateOrderStatus(order.id, 'cancelado');
+      
+      if (order.whatsapp) {
+        setTimeout(() => {
+          if (window.confirm('Deseja avisar o cliente sobre o cancelamento pelo WhatsApp?')) {
+            const reason = window.prompt('Qual o motivo do cancelamento? (ex: Produto em falta)');
+            if (reason) {
+              const numericPhone = order.whatsapp.replace(/\D/g, '');
+              const text = `Olá, ${order.customerName}.\n\nInfelizmente seu pedido no nosso estabelecimento precisou ser *cancelado*.\n\n*Motivo:* ${reason}\n\nAgradecemos a compreensão.`;
+              window.open(`https://wa.me/55${numericPhone}?text=${encodeURIComponent(text)}`, '_blank');
+            }
+          }
+        }, 100);
+      }
+    }
+  };
+
   const handlePrint = (order: Order) => {
     setPrintingOrder(order);
     setTimeout(() => {
@@ -200,28 +219,47 @@ export default function KDS() {
 
                         <div className="mt-auto text-xs">
                           {order.status === 'na-fila' && order.paymentStatus === 'pending' && ['pix', 'credit', 'debit'].includes(order.paymentMethod || '') ? (
-                            <div className="bg-white p-3 rounded-xl flex items-center justify-between border-2 border-brand/20 shadow-sm">
-                              <span className="flex items-center gap-1.5 font-display font-bold text-brand uppercase tracking-widest text-[10px]">
-                                <AlertCircle className="w-4 h-4" strokeWidth={2.5} /> Aguardando {order.paymentMethod?.toUpperCase()}
+                            <div className="bg-white p-3 rounded-xl flex items-center justify-between border-2 border-brand/20 shadow-sm gap-2">
+                              <span className="flex items-center gap-1.5 font-display font-bold text-brand uppercase tracking-widest text-[10px] leading-tight flex-1">
+                                <AlertCircle className="w-4 h-4 shrink-0" strokeWidth={2.5} /> Falta {order.paymentMethod?.toUpperCase()}
                               </span>
-                              <button 
-                                onClick={() => confirmPayment(order.id)}
-                                className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-light transition-colors text-[10px] font-display font-bold uppercase tracking-widest shadow-md active:scale-95"
-                              >
-                                Liberar
-                              </button>
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => handleCancelOrder(order)}
+                                  className="px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-[10px] font-display font-bold uppercase tracking-widest active:scale-95 border border-red-200"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  onClick={() => confirmPayment(order.id)}
+                                  className="px-4 py-2 bg-brand text-white rounded-lg hover:bg-brand-light transition-colors text-[10px] font-display font-bold uppercase tracking-widest shadow-md active:scale-95"
+                                >
+                                  Liberar
+                                </button>
+                              </div>
                             </div>
                           ) : (
-                            <button 
-                              onClick={() => handleNextStatus(order)}
-                              className="w-full py-3 bg-ink text-white rounded-xl hover:bg-black transition-colors text-xs font-display font-bold uppercase tracking-widest shadow-md flex items-center justify-center gap-2 active:scale-95"
-                            >
-                              <Check className="w-4 h-4" strokeWidth={3} />
-                              {col.key === 'fila' ? 'Iniciar Preparo' : 
-                               col.key === 'preparo' ? 'Pronto / Enviar' : 
-                               order.status === 'pronto-entrega' ? 'Aguardando Coleta' :
-                               'Finalizar'}
-                            </button>
+                            <div className="flex gap-2">
+                              {/* Option to cancel from anywhere if not finished/cancelled */}
+                              <button 
+                                onClick={() => handleCancelOrder(order)}
+                                className="px-4 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors uppercase tracking-widest flex items-center justify-center active:scale-95 border border-red-200"
+                                title="Cancelar Pedido"
+                              >
+                                <X className="w-4 h-4" strokeWidth={3} />
+                              </button>
+                              
+                              <button 
+                                onClick={() => handleNextStatus(order)}
+                                className="flex-1 py-3 bg-ink text-white rounded-xl hover:bg-black transition-colors text-xs font-display font-bold uppercase tracking-widest shadow-md flex items-center justify-center gap-2 active:scale-95"
+                              >
+                                <Check className="w-4 h-4" strokeWidth={3} />
+                                {col.key === 'fila' ? 'Iniciar Preparo' : 
+                                 col.key === 'preparo' ? 'Pronto / Enviar' : 
+                                 order.status === 'pronto-entrega' ? 'Aguardar Coleta' :
+                                 'Finalizar'}
+                              </button>
+                            </div>
                           )}
                         </div>
                       </motion.div>
