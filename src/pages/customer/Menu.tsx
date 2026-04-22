@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../store';
-import { Search, UtensilsCrossed, AlertTriangle, MapPin } from 'lucide-react';
+import { Search, UtensilsCrossed, AlertTriangle, MapPin, ShieldCheck, Navigation, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -16,6 +16,12 @@ export default function Menu() {
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [geoError, setGeoError] = useState<string | null>(null);
   const [sessionLock, setSessionLock] = useState<string | null>(null);
+  const [showLGPD, setShowLGPD] = useState(() => !localStorage.getItem('up_lgpd_accepted'));
+
+  const handleAcceptLGPD = () => {
+    localStorage.setItem('up_lgpd_accepted', 'true');
+    setShowLGPD(false);
+  };
 
   // Subscribe to menu
   useEffect(() => {
@@ -59,6 +65,8 @@ export default function Menu() {
   // Geofencing Check
   useEffect(() => {
     const checkGeofence = async () => {
+      if (showLGPD) return; // Aguarda aprovação antes de pedir GPS da API nativa
+      
       const docSnap = await getDoc(doc(db, 'settings', 'config'));
       if (docSnap.exists() && docSnap.data().geoEnabled) {
         const config = docSnap.data();
@@ -107,7 +115,7 @@ export default function Menu() {
     if (orderType === 'dine-in') {
       checkGeofence();
     }
-  }, [orderType]);
+  }, [orderType, showLGPD]);
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(menu.map(item => item.category)));
@@ -192,6 +200,54 @@ export default function Menu() {
   return (
     <div className="px-5 py-6 pb-32">
       <AnimatePresence>
+        {showLGPD && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <div className="bg-white w-full max-w-md rounded-[32px] p-8 shadow-2xl relative overflow-hidden text-center border-b-4 border-brand">
+              <div className="w-16 h-16 bg-brand/10 text-brand rounded-[24px] flex items-center justify-center mx-auto mb-6">
+                 <ShieldCheck className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-display font-black text-ink mb-3 uppercase italic tracking-tighter leading-none">
+                Uma experiência <br/><span className="text-brand">feita pra você!</span>
+              </h3>
+              <p className="text-ink-muted text-sm font-medium leading-relaxed mb-6">
+                Para deixar seu pedido rápido e sem complicação, precisamos de duas permissões básicas:
+              </p>
+              
+              <div className="space-y-4 text-left bg-oat/50 p-5 rounded-2xl mb-8">
+                 <div className="flex gap-4 items-start">
+                    <Navigation className="w-5 h-5 text-brand shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-ink text-sm">Localização (GPS)</p>
+                      <p className="text-ink-muted text-xs font-medium">Pra saber se você já está na mesa conosco ou para mandar a encomenda pra sua casa certinho.</p>
+                    </div>
+                 </div>
+                 <div className="flex gap-4 items-start pt-4 border-t border-black/5">
+                    <Info className="w-5 h-5 text-brand shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-ink text-sm">Contatos / WhatsApp</p>
+                      <p className="text-ink-muted text-xs font-medium">Apenas pra te avisar quando a comida ficar pronta e o garçom te achar rapidinho.</p>
+                    </div>
+                 </div>
+              </div>
+              
+              <button 
+                onClick={handleAcceptLGPD}
+                className="w-full bg-brand text-white h-14 rounded-2xl font-display font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all"
+              >
+                Entendi e Aceito
+              </button>
+              <p className="text-[9px] text-ink-muted font-bold uppercase tracking-widest mt-6">
+                 🔒 Respeitamos seus dados (LGPD)<br/> Usaremos apenas para sua fome!
+              </p>
+            </div>
+          </motion.div>
+        )}
+
         {sessionLock && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
