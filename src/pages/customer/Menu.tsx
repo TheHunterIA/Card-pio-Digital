@@ -16,12 +16,25 @@ export default function Menu() {
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [geoError, setGeoError] = useState<string | null>(null);
   const [sessionLock, setSessionLock] = useState<string | null>(null);
-  const [showLGPD, setShowLGPD] = useState(() => !localStorage.getItem('up_lgpd_accepted'));
+  const [showLGPD, setShowLGPD] = useState(() => {
+    const status = localStorage.getItem('up_lgpd_accepted');
+    return status !== 'true' && status !== 'declined';
+  });
+  const [showLGPDDeclineModal, setShowLGPDDeclineModal] = useState(false);
 
   const handleAcceptLGPD = () => {
     localStorage.setItem('up_lgpd_accepted', 'true');
+    useStore.setState({ lgpdStatus: 'accepted' });
     setShowLGPD(false);
   };
+
+  const handleDeclineLGPD = () => {
+    localStorage.setItem('up_lgpd_accepted', 'declined');
+    useStore.setState({ lgpdStatus: 'declined', requireUpfrontPayment: true }); // Automatically enforce upfront payment in logic
+    setShowLGPDDeclineModal(false);
+    setShowLGPD(false);
+  };
+
 
   // Subscribe to menu
   useEffect(() => {
@@ -222,28 +235,83 @@ export default function Menu() {
                  <div className="flex gap-4 items-start">
                     <Navigation className="w-5 h-5 text-brand shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-ink text-sm">Localização (GPS)</p>
-                      <p className="text-ink-muted text-xs font-medium">Pra saber se você já está na mesa conosco ou para mandar a encomenda pra sua casa certinho.</p>
+                      <p className="font-bold text-ink text-sm">Sua localização</p>
+                      <p className="text-ink-muted text-xs font-medium">Pra saber se você está aqui na mesa ou calcular a entrega certinho.</p>
                     </div>
                  </div>
                  <div className="flex gap-4 items-start pt-4 border-t border-black/5">
                     <Info className="w-5 h-5 text-brand shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-ink text-sm">Contatos / WhatsApp</p>
-                      <p className="text-ink-muted text-xs font-medium">Apenas pra te avisar quando a comida ficar pronta e o garçom te achar rapidinho.</p>
+                      <p className="font-bold text-ink text-sm">Seu WhatsApp</p>
+                      <p className="text-ink-muted text-xs font-medium">Só pra avisar quando seu pedido estiver pronto.</p>
                     </div>
                  </div>
               </div>
               
-              <button 
-                onClick={handleAcceptLGPD}
-                className="w-full bg-brand text-white h-14 rounded-2xl font-display font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all"
-              >
-                Entendi e Aceito
-              </button>
+              <div className="space-y-3">
+                <button 
+                  onClick={handleAcceptLGPD}
+                  className="w-full bg-brand text-white h-14 rounded-2xl font-display font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all"
+                >
+                  Entendi e Aceito
+                </button>
+                <button 
+                  onClick={() => setShowLGPDDeclineModal(true)}
+                  className="w-full text-ink-muted h-10 rounded-2xl font-display font-bold uppercase tracking-widest text-[10px] active:scale-95 transition-all"
+                >
+                  Prefiro não autorizar
+                </button>
+              </div>
               <p className="text-[9px] text-ink-muted font-bold uppercase tracking-widest mt-6">
                  🔒 Respeitamos seus dados (LGPD)<br/> Usaremos apenas para sua fome!
               </p>
+            </div>
+          </motion.div>
+        )}
+
+        {showLGPDDeclineModal && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="fixed inset-0 z-[210] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          >
+            <div className="bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl relative text-center border-t-4 border-yellow-500">
+              <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-[24px] flex items-center justify-center mx-auto mb-6">
+                 <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-display font-black text-ink mb-3 uppercase italic tracking-tighter leading-none">
+                Tem certeza?
+              </h3>
+              <p className="text-ink-muted text-sm font-medium leading-relaxed mb-6">
+                Sem essas permissões, sua experiência será <span className="font-bold text-ink">Limitada</span>:
+              </p>
+              
+              <ul className="text-left space-y-3 mb-8 bg-oat/50 p-5 rounded-2xl">
+                <li className="flex items-start gap-2">
+                  <span className="text-xl">💸</span>
+                  <span className="text-xs text-ink-muted font-medium leading-tight">Você precisará fazer o <strong className="text-ink">pagamento antecipado</strong> de todos os pedidos no caixa ou pelo celular.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-xl">🔕</span>
+                  <span className="text-xs text-ink-muted font-medium leading-tight">Você <strong className="text-ink">não receberá</strong> o andamento mágico do seu prato pelo WhatsApp.</span>
+                </li>
+              </ul>
+              
+              <div className="space-y-3">
+                <button 
+                  onClick={() => setShowLGPDDeclineModal(false)}
+                  className="w-full bg-brand text-white h-14 rounded-2xl font-display font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all"
+                >
+                  Mudei de ideia, autorizar
+                </button>
+                <button 
+                  onClick={handleDeclineLGPD}
+                  className="w-full text-ink-muted bg-oat h-12 rounded-2xl font-display font-bold uppercase tracking-widest text-[10px] active:scale-95 transition-all"
+                >
+                  Continuar de forma limitada
+                </button>
+              </div>
             </div>
           </motion.div>
         )}

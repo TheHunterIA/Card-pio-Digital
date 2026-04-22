@@ -149,6 +149,9 @@ interface AppState {
   isFreeDeliveryCoupon: boolean;
   setIsFreeDeliveryCoupon: (val: boolean) => void;
 
+  lgpdStatus: 'accepted' | 'declined' | null;
+  setLgpdStatus: (status: 'accepted' | 'declined' | null) => void;
+
   // Sessions & Real-time Sharing
   currentSessionId: string | null;
   setCurrentSessionId: (id: string | null) => void;
@@ -223,6 +226,8 @@ export const useStore = create<AppState>()(
   setWaiterName: (name) => set({ waiterName: name }),
   requireUpfrontPayment: false,
   setRequireUpfrontPayment: (val) => set({ requireUpfrontPayment: val }),
+  lgpdStatus: null as 'accepted' | 'declined' | null,
+  setLgpdStatus: (status) => set({ lgpdStatus: status }),
   address: '',
   setAddress: (address) => set({ address: address }),
   addressNumber: '',

@@ -10,12 +10,16 @@ interface IdentifyModalProps {
 }
 
 export default function IdentifyModal({ isOpen, onClose, onConfirm }: IdentifyModalProps) {
-  const { customerName, setCustomerName, whatsapp, setWhatsapp } = useStore();
+  const { customerName, setCustomerName, whatsapp, setWhatsapp, lgpdStatus } = useStore();
   const [localName, setLocalName] = useState(customerName);
   const [localWhatsapp, setLocalWhatsapp] = useState(whatsapp);
 
+  const isWhatsappRequired = lgpdStatus !== 'declined';
+
   const handleConfirm = () => {
-    if (!localName.trim() || !localWhatsapp.trim()) return;
+    if (!localName.trim()) return;
+    if (isWhatsappRequired && !localWhatsapp.trim()) return;
+    
     setCustomerName(localName);
     setWhatsapp(localWhatsapp);
     onConfirm();
@@ -72,14 +76,14 @@ export default function IdentifyModal({ isOpen, onClose, onConfirm }: IdentifyMo
                   value={localWhatsapp}
                   onChange={(e) => setLocalWhatsapp(e.target.value)}
                   className="block w-full pl-12 pr-4 py-4 bg-white border-2 border-transparent rounded-2xl leading-5 shadow-sm text-ink font-medium placeholder-gray-400 focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10 transition-all"
-                  placeholder="WhatsApp (com DDD)"
+                  placeholder={isWhatsappRequired ? "WhatsApp (com DDD)" : "WhatsApp (Opcional)"}
                 />
               </div>
             </div>
 
             <button
               onClick={handleConfirm}
-              disabled={!localName.trim() || !localWhatsapp.trim()}
+              disabled={!localName.trim() || (isWhatsappRequired && !localWhatsapp.trim())}
               className="w-full bg-ink hover:bg-black disabled:bg-gray-200 text-white disabled:text-gray-400 font-display font-bold py-5 rounded-full active:scale-95 transition-all text-lg shadow-[0_8px_20px_-6px_rgba(28,25,23,0.3)] disabled:shadow-none tracking-wide flex items-center justify-center gap-2"
             >
               <Check className="w-6 h-6" strokeWidth={3} />

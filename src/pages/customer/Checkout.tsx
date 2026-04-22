@@ -274,8 +274,15 @@ export default function Checkout() {
       (err) => {
         console.error(err);
         setIsLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          alert('Você negou o acesso à localização. Autorize no seu navegador/celular para calcularmos a entrega.');
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          alert('Sinal de GPS indisponível no momento. Tente chegar mais perto de uma janela.');
+        } else {
+          alert('Não foi possível obter sua localização. Verifique o GPS do aparelho.');
+        }
       },
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
