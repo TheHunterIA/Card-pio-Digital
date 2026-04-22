@@ -89,7 +89,17 @@ export default function Menu() {
             setGeoError(null);
           }
         }, (err) => {
-          setGeoError("Ative o GPS para pedir no local. É uma medida de segurança.");
+          if (err.code === err.PERMISSION_DENIED) {
+            setGeoError("Você negou o acesso à localização. Autorize no seu navegador/celular para pedir na mesa.");
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            setGeoError("Sinal de GPS indisponível no momento. Tente chegar mais perto de uma janela.");
+          } else {
+            setGeoError("Ative o GPS ou permita a localização no navegador para pedir no local (Medida de segurança).");
+          }
+        }, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
         });
       }
     };
