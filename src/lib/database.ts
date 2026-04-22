@@ -330,18 +330,6 @@ export async function updateDriverLocation(orderId: string, lat: number, lng: nu
   }
 }
 
-export async function completeDelivery(orderId: string) {
-  try {
-    await updateDoc(doc(db, 'orders', orderId), {
-      status: 'finalizado',
-      paymentStatus: 'paid', // Assume paid on completion
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    handleFirestoreError(error, 'update', `orders/${orderId}`, auth.currentUser);
-  }
-}
-
 export async function finalizeOrder(orderId: string) {
   try {
     await updateDoc(doc(db, 'orders', orderId), {

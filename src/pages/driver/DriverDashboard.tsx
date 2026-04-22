@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore, Order } from '../../store';
-import { acceptDelivery, updateDriverLocation, completeDelivery } from '../../lib/database';
+import { acceptDelivery, updateDriverLocation, finalizeOrder } from '../../lib/database';
 import { useAuth } from '../../lib/AuthProvider';
 import { Package, MapPin, Navigation, CheckCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -53,7 +53,7 @@ export default function DriverDashboard() {
   const handleComplete = async () => {
     if (!activeOrder) return;
     if (confirmCode === activeOrder.deliveryCode) {
-      await completeDelivery(activeOrder.id);
+      await finalizeOrder(activeOrder.id);
       setConfirmCode('');
       setError('');
       setActiveTab('available');

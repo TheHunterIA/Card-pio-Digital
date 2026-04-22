@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc, collection, query, where, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useStore, Order } from '../../store';
-import { updateOrderStatus, completeDelivery } from '../../lib/database';
+import { updateOrderStatus, finalizeOrder } from '../../lib/database';
 import { 
   CheckCircle2, 
   QrCode, 
@@ -157,7 +157,7 @@ export default function OrderStatus() {
     setIsFinalizing(true);
     setShowConfirmation(false);
     try {
-      await completeDelivery(order.id);
+      await finalizeOrder(order.id);
     } catch (error: any) {
       console.error('Falha crítica ao finalizar:', error);
       alert('Não conseguimos conectar ao nosso servidor. Verifique sua rede e tente novamente.');
