@@ -228,7 +228,7 @@ export default function Menu() {
                 Uma experiência <br/><span className="text-brand">feita pra você!</span>
               </h3>
               <p className="text-ink-muted text-sm font-medium leading-relaxed mb-6">
-                Para deixar seu pedido rápido e sem complicação, precisamos de duas permissões básicas:
+                Pra deixar seu pedido rápido e sem complicação:
               </p>
               
               <div className="space-y-4 text-left bg-oat/50 p-5 rounded-2xl mb-8">
@@ -253,7 +253,7 @@ export default function Menu() {
                   onClick={handleAcceptLGPD}
                   className="w-full bg-brand text-white h-14 rounded-2xl font-display font-bold uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all"
                 >
-                  Entendi e Aceito
+                  Continuar Pedido
                 </button>
                 <button 
                   onClick={() => setShowLGPDDeclineModal(true)}
@@ -263,7 +263,7 @@ export default function Menu() {
                 </button>
               </div>
               <p className="text-[9px] text-ink-muted font-bold uppercase tracking-widest mt-6">
-                 🔒 Respeitamos seus dados (LGPD)<br/> Usaremos apenas para sua fome!
+                 🔒 Respeitamos seus dados (LGPD)<br/> Seus dados estão seguros e usados apenas para seu pedido 🍔
               </p>
             </div>
           </motion.div>
@@ -284,17 +284,17 @@ export default function Menu() {
                 Tem certeza?
               </h3>
               <p className="text-ink-muted text-sm font-medium leading-relaxed mb-6">
-                Sem essas permissões, sua experiência será <span className="font-bold text-ink">Limitada</span>:
+                Sem isso, você perde algumas facilidades:
               </p>
               
               <ul className="text-left space-y-3 mb-8 bg-oat/50 p-5 rounded-2xl">
                 <li className="flex items-start gap-2">
-                  <span className="text-xl">💸</span>
-                  <span className="text-xs text-ink-muted font-medium leading-tight">Você precisará fazer o <strong className="text-ink">pagamento antecipado</strong> de todos os pedidos no caixa ou pelo celular.</span>
+                  <span className="text-xl">💰</span>
+                  <span className="text-xs text-ink-muted font-medium leading-tight">Você terá que pagar antes de pedir (no caixa ou no celular).</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-xl">🔕</span>
-                  <span className="text-xs text-ink-muted font-medium leading-tight">Você <strong className="text-ink">não receberá</strong> o andamento mágico do seu prato pelo WhatsApp.</span>
+                  <span className="text-xl">🚫</span>
+                  <span className="text-xs text-ink-muted font-medium leading-tight">Você não vai receber atualizações do pedido no WhatsApp.</span>
                 </li>
               </ul>
               
@@ -309,7 +309,7 @@ export default function Menu() {
                   onClick={handleDeclineLGPD}
                   className="w-full text-ink-muted bg-oat h-12 rounded-2xl font-display font-bold uppercase tracking-widest text-[10px] active:scale-95 transition-all"
                 >
-                  Continuar de forma limitada
+                  Continuar mesmo assim
                 </button>
               </div>
             </div>
