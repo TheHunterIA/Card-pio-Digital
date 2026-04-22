@@ -46,65 +46,12 @@ export default function Welcome() {
   }, [currentOrderId]);
 
   useEffect(() => {
-    const validateLocationAndProceed = async () => {
-      // Por padrão, setamos requireUpfrontPayment como false a menos que falhe
-      setRequireUpfrontPayment(false);
-      
-      try {
-        const configDoc = await getDoc(doc(db, 'settings', 'config'));
-        const config = configDoc.data();
-
-        // Se Geofence não está ligada ou não tem coordenada, apenas prossegue normal
-        if (!config?.geoEnabled || typeof config?.lat !== 'number' || typeof config?.lng !== 'number') {
-          return;
-        }
-
-        // Se não tem GPS, prossegue exigindo pagamento antecipado silenciosamente
-        if (!navigator.geolocation) {
-          setRequireUpfrontPayment(true);
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const distance = getDistanceInMeters(
-              pos.coords.latitude, 
-              pos.coords.longitude, 
-              config.lat, 
-              config.lng
-            );
-            
-            const maxRadius = config.radiusMeters || 200;
-            
-            // Se estiver longe, exige pagamento antecipado
-            if (distance > maxRadius) {
-              setRequireUpfrontPayment(true);
-            }
-          },
-          (err) => {
-            console.error('GPS error:', err);
-            // Se negou permissão, exige pagamento antecipado
-            setRequireUpfrontPayment(true);
-          },
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
-
-      } catch (err) {
-        console.error('Erro ao buscar config de geo:', err);
-      }
-    };
-
-    validateLocationAndProceed();
-  }, [setRequireUpfrontPayment]);
-
-  useEffect(() => {
     const mesaParam = searchParams.get('mesa');
     if (!mesaParam) return;
 
     setOrderType('dine-in');
-    setTableNumber(mesaParam);
-    navigate('/cardapio');
-  }, [searchParams, setOrderType, setTableNumber, navigate]);
+    handleTableSelect(mesaParam);
+  }, [searchParams]);
 
   const handleTypeSelect = (type: OrderType) => {
     setSelectedType(type);
@@ -116,7 +63,49 @@ export default function Welcome() {
     }
   };
 
-  const handleTableSelect = (table: string) => {
+  const handleTableSelect = async (table: string) => {
+    try {
+      const configDoc = await getDoc(doc(db, 'settings', 'config'));
+      const config = configDoc.data();
+
+      // Set upfront payment to false by default
+      setRequireUpfrontPayment(false);
+
+      if (config?.geoEnabled && typeof config?.lat === 'number' && typeof config?.lng === 'number') {
+        if (navigator.geolocation) {
+          try {
+             // Request permission and check distance only when they try to sit at a table
+             const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+               navigator.geolocation.getCurrentPosition(resolve, reject, { 
+                 enableHighAccuracy: true, 
+                 timeout: 10000, 
+                 maximumAge: 0 
+               });
+             });
+             
+             const distance = getDistanceInMeters(
+               pos.coords.latitude, 
+               pos.coords.longitude, 
+               config.lat, 
+               config.lng
+             );
+             
+             const maxRadius = config.radiusMeters || 200;
+             if (distance > maxRadius) {
+               setRequireUpfrontPayment(true);
+             }
+          } catch (err) {
+             console.error('GPS error on table select:', err);
+             setRequireUpfrontPayment(true);
+          }
+        } else {
+          setRequireUpfrontPayment(true);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao buscar config de geo:', err);
+    }
+    
     setTableNumber(table);
     navigate('/cardapio');
   };
