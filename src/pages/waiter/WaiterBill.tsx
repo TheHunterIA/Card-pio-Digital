@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
-import { finalizeOrder, markManualPayment } from '../../lib/database';
+import { finalizeOrder, markManualPayment, syncManualClient } from '../../lib/database';
 import { ChevronLeft, Receipt, QrCode, CheckCircle2, Utensils, Printer, ShieldCheck, AlertCircle, MessageCircle, Send, X as CloseIcon, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -149,6 +149,9 @@ export default function WaiterBill() {
 
       // 3. Open WhatsApp conversation
       window.open(whatsappUrl, '_blank');
+      
+      // 4. Sync to CRM
+      await syncManualClient(whatsappName, whatsappNumber);
       
       if (copiedToClipboard) {
         alert("Conversa aberta! A imagem foi COPIADA. Basta COLAR (Ctrl+V ou Segurar e Colar) na conversa do WhatsApp.");

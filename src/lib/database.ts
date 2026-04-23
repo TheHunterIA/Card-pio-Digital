@@ -58,6 +58,16 @@ export function subscribeToOrders() {
   });
 }
 
+export function subscribeToCustomers() {
+  const q = query(collection(db, 'clientes'));
+  return onSnapshot(q, (snapshot) => {
+    const customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    useStore.getState().setCustomers(customers);
+  }, (error) => {
+    console.error("Customers sync error:", error);
+  });
+}
+
 export function subscribeToDeliveryConfig() {
   if (!db) return () => {};
   const ref = doc(db, 'settings', 'delivery');
@@ -141,6 +151,23 @@ export async function syncClientProfile() {
     }, { merge: true });
   } catch (error) {
     console.error("Failed to sync client profile", error);
+  }
+}
+
+export async function syncManualClient(name: string, whatsapp: string) {
+  if (!whatsapp || whatsapp.length < 8) return;
+  
+  const cleanWhatsapp = whatsapp.replace(/\D/g, '');
+  const clientRef = doc(db, 'clientes', cleanWhatsapp);
+  try {
+    await setDoc(clientRef, {
+      name,
+      whatsapp: cleanWhatsapp,
+      lastSeen: serverTimestamp(),
+      type: 'manual'
+    }, { merge: true });
+  } catch (error) {
+    console.error("Failed to sync manual client profile", error);
   }
 }
 

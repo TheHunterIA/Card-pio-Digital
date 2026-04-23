@@ -19,30 +19,42 @@ interface CustomerStats {
 
 export default function Customers() {
   const orders = useStore(state => state.orders);
+  const baseCustomers = useStore(state => state.customers);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'todos' | 'fiel' | 'ativo' | 'sumido'>('todos');
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerStats | null>(null);
 
   const customers = useMemo(() => {
-    const groups: Record<string, { orders: typeof orders, name: string }> = {};
+    const groups: Record<string, { orders: any[], name: string, lastSeen?: any }> = {};
     
-    // Group orders by WhatsApp
+    // 1. Start with known base customers (from 'clientes' collection)
+    baseCustomers.forEach(c => {
+      groups[c.whatsapp] = { 
+        orders: [], 
+        name: c.name,
+        lastSeen: c.lastSeen?.toDate ? c.lastSeen.toDate() : null
+      };
+    });
+
+    // 2. Add/Merge data from orders
     orders.forEach(order => {
       if (!order.whatsapp) return;
       if (!groups[order.whatsapp]) {
         groups[order.whatsapp] = { orders: [], name: order.customerName };
       }
       groups[order.whatsapp].orders.push(order);
+      // Prefer order name if base name is missing
+      if (!groups[order.whatsapp].name) groups[order.whatsapp].name = order.customerName;
     });
 
-    // Compute stats
+    // 3. Compute stats
     return Object.entries(groups).map(([whatsapp, data]): CustomerStats => {
       const sortedOrders = [...data.orders].sort((a, b) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       
       const lastOrder = sortedOrders[0];
-      const lastDate = parseISO(lastOrder.createdAt);
+      const lastDate = lastOrder ? parseISO(lastOrder.createdAt) : data.lastSeen || new Date();
       const daysSince = differenceInDays(new Date(), lastDate);
       
       // Calculate favorite item and ratings
@@ -65,11 +77,12 @@ export default function Customers() {
       const avgRating = ratingCount > 0 ? totalRating / ratingCount : null;
 
       let status: CustomerStats['status'] = 'ativo';
-      if (orderCount >= 5 && daysSince < 15) status = 'fiel';
+      if (orderCount === 0) status = 'sumido'; // Visitors who haven't ordered yet
+      else if (orderCount >= 5 && daysSince < 15) status = 'fiel';
       else if (daysSince >= 30) status = 'sumido';
 
       return {
-        name: data.name,
+        name: data.name || 'Identificado',
         whatsapp,
         orderCount,
         totalSpent: data.orders.reduce((sum, o) => sum + o.total, 0),
@@ -80,7 +93,7 @@ export default function Customers() {
         allOrders: sortedOrders
       };
     }).sort((a, b) => b.orderCount - a.orderCount);
-  }, [orders]);
+  }, [orders, baseCustomers]);
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {

@@ -3,7 +3,7 @@ import { Outlet, NavLink, Navigate } from 'react-router-dom';
 import { LayoutDashboard, Settings, LogOut, UtensilsCrossed, Truck, Map, Users, QrCode, BookOpen, Menu, X, Contact, BarChart3, User, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../lib/AuthProvider';
-import { subscribeToMenu } from '../../lib/database';
+import { subscribeToMenu, subscribeToOrders, subscribeToCustomers } from '../../lib/database';
 
 export default function AdminLayout() {
   const { user, isAdmin, loading, logout } = useAuth();
@@ -12,8 +12,14 @@ export default function AdminLayout() {
   useEffect(() => {
     // Only subscribe if admin is loaded and logged in
     if (!loading && isAdmin) {
-      const unsub = subscribeToMenu();
-      return () => unsub();
+      const unsubMenu = subscribeToMenu();
+      const unsubOrders = subscribeToOrders();
+      const unsubCustomers = subscribeToCustomers();
+      return () => {
+        unsubMenu();
+        unsubOrders();
+        unsubCustomers();
+      };
     }
   }, [loading, isAdmin]);
 

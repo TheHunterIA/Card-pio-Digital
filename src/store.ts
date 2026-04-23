@@ -139,6 +139,10 @@ interface AppState {
   currentOrderId: string | null;
   setCurrentOrderId: (id: string | null) => void;
 
+  // Customers (Manual and automatic)
+  customers: any[];
+  setCustomers: (customers: any[]) => void;
+
   // Driver
   isDriver: boolean;
   setIsDriver: (is: boolean) => void;
@@ -282,6 +286,9 @@ export const useStore = create<AppState>()(
   setOrders: (orders) => set({ orders }),
   currentOrderId: null,
   setCurrentOrderId: (id) => set({ currentOrderId: id }),
+
+  customers: [],
+  setCustomers: (customers) => set({ customers }),
 
   isDriver: false,
   setIsDriver: (is) => set({ isDriver: is }),
