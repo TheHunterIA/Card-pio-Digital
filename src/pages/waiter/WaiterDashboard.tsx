@@ -113,27 +113,47 @@ export default function WaiterDashboard() {
                 className={`relative overflow-hidden aspect-square rounded-[32px] border-2 transition-all p-4 flex flex-col items-center justify-center gap-2 cursor-pointer ${
                   hasReadyOrder
                     ? 'bg-brand border-brand text-white shadow-[0_0_30px_rgba(255,78,0,0.3)] animate-pulse'
-                    : isOccupied 
-                      ? 'bg-ink border-ink text-white shadow-xl rotate-1' 
-                      : 'bg-white border-black/5 text-ink hover:border-brand/30'
+                    : hasBillRequest
+                      ? 'bg-amber-500 border-amber-500 text-black shadow-xl'
+                      : isOccupied 
+                        ? 'bg-ink border-ink text-white shadow-xl rotate-1' 
+                        : 'bg-white border-black/5 text-ink hover:border-brand/30'
                 }`}
               >
-                <div className="absolute top-2 right-2 flex gap-1">
-                   {hasReadyOrder && <BellRing className="w-4 h-4 text-white animate-bounce" />}
+                <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                   {hasReadyOrder && (
+                     <div className="bg-white text-brand px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter flex items-center gap-1 shadow-sm">
+                        <BellRing className="w-2 h-2 animate-bounce" />
+                        PRONTO!
+                     </div>
+                   )}
+                   {hasBillRequest && !hasReadyOrder && (
+                     <div className="bg-black text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-tighter shadow-sm">
+                        CONTA
+                     </div>
+                   )}
                 </div>
 
-                <span className={`font-display font-black text-3xl ${isOccupied || hasReadyOrder ? 'text-white' : 'text-ink'}`}>
+                <span className={`font-display font-black text-4xl ${isOccupied || hasReadyOrder || hasBillRequest ? 'text-white' : 'text-ink'}`}>
                   {table.id}
                 </span>
                 
                 <div className="flex gap-2">
-                  {isOccupied && !hasReadyOrder && <Utensils className="w-4 h-4 text-brand" />}
-                  {pendingPix && <AlertCircle className="w-4 h-4 text-brand animate-pulse" />}
-                  {hasBillRequest && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                  {hasReadyOrder ? (
+                    <BellRing className="w-6 h-6 text-white animate-bounce" />
+                  ) : hasBillRequest ? (
+                    <Receipt className="w-6 h-6 text-black" />
+                  ) : pendingPix ? (
+                    <AlertCircle className="w-6 h-6 text-white animate-pulse" />
+                  ) : isOccupied ? (
+                    <Utensils className="w-6 h-6 text-brand" />
+                  ) : (
+                    <div className="w-1.5 h-1.5 rounded-full bg-ink/10" />
+                  )}
                 </div>
 
-                <div className={`mt-2 text-[9px] font-black uppercase tracking-[0.2em] ${isOccupied || hasReadyOrder ? 'text-white/60' : 'text-ink-muted'}`}>
-                  {hasReadyOrder ? 'Pronto!' : isOccupied ? 'Ativa' : 'Livre'}
+                <div className={`mt-2 text-[10px] font-black uppercase tracking-[0.2em] ${(isOccupied || hasReadyOrder || hasBillRequest) ? 'text-white/60' : 'text-ink-muted'}`}>
+                  {hasReadyOrder ? 'ENTREGAR' : hasBillRequest ? 'SOLICITOU CONTA' : isOccupied ? 'OCUPADA' : 'LIVRE'}
                 </div>
               </motion.div>
             );

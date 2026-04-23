@@ -744,6 +744,21 @@ export default function PorterDashboard() {
                         }`}
                       >
                         <span className="text-xl md:text-2xl font-display font-black italic">{table.id}</span>
+                        
+                        <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5">
+                           {hasReady && (
+                             <div className="bg-white text-brand px-1.5 py-0.5 rounded-full text-[6px] font-black uppercase tracking-tighter flex items-center gap-0.5 shadow-sm">
+                                <BellRing className="w-1.5 h-1.5 animate-bounce" />
+                                PRONTO!
+                             </div>
+                           )}
+                           {hasPending && !hasReady && (
+                             <div className="bg-black text-white px-1.5 py-0.5 rounded-full text-[6px] font-black uppercase tracking-tighter shadow-sm">
+                                PAG
+                             </div>
+                           )}
+                        </div>
+
                         <div className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-current opacity-30 mt-1" />
                         
                         <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-brand text-white text-[7px] font-black px-1.5 rounded-full pointer-events-none z-50">
