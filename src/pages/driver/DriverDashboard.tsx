@@ -130,20 +130,35 @@ export default function DriverDashboard() {
                 availableOrders.map(order => (
                   <div key={order.id} className="bg-white p-5 rounded-3xl shadow-sm border border-black/5">
                     <div className="flex justify-between items-start mb-4">
-                      <div>
+                      <div className="flex-1 mr-4">
                         <h3 className="font-display font-bold text-ink">{order.customerName}</h3>
                         <p className="text-xs text-ink-muted font-medium flex items-center gap-1 mt-1">
                           <MapPin className="w-3 h-3 text-brand" /> {order.address}{order.addressNumber ? `, ${order.addressNumber}` : ''}{order.addressComplement ? ` - ${order.addressComplement}` : ''}
                         </p>
+                        
+                        <div className="flex items-center gap-2 mt-2">
+                           <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                             order.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                           }`}>
+                             {order.paymentStatus === 'paid' ? 'Já Pago' : 'Cobrar na Entrega'}
+                           </span>
+                           <span className="text-[9px] font-bold text-ink-muted bg-gray-50 px-2 py-0.5 rounded-full uppercase border border-black/5">
+                             {order.paymentMethod === 'pix' ? 'PIX' : 
+                              order.paymentMethod === 'credit' ? 'Cartão Crédito' :
+                              order.paymentMethod === 'debit' ? 'Cartão Débito' : 'Dinheiro/Maquininha'}
+                           </span>
+                        </div>
                       </div>
-                      <span className="bg-brand/10 text-brand px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="bg-brand/10 text-brand px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest flex flex-col items-center gap-1">
+                        <span className="flex items-center gap-1">
+                          R$ {order.total.toFixed(2)}
+                        </span>
                         {currentPos && order.customerLocation && (
-                          <span className="flex items-center gap-1 border-r border-brand/20 pr-1.5 mr-1.5">
-                             <Navigation className="w-3 h-3" />
+                          <span className="flex items-center gap-1 text-[8px] opacity-70 border-t border-brand/20 pt-1 mt-1">
+                             <Navigation className="w-2.5 h-2.5" />
                              {calculateDistance(currentPos.lat, currentPos.lng, order.customerLocation.lat, order.customerLocation.lng)}km
                           </span>
                         )}
-                        R$ {order.total.toFixed(2)}
                       </span>
                     </div>
 
@@ -182,8 +197,15 @@ export default function DriverDashboard() {
                       <div className="w-12 h-12 bg-brand rounded-full flex items-center justify-center text-white">
                         <Navigation className="w-6 h-6" />
                       </div>
-                      <div>
-                        <h2 className="text-lg font-display font-bold text-ink">Em Entrega</h2>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                          <h2 className="text-lg font-display font-bold text-ink">Em Entrega</h2>
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded-lg uppercase tracking-wider ${
+                            activeOrder.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700 animate-pulse'
+                          }`}>
+                            {activeOrder.paymentStatus === 'paid' ? 'PAGAMENTO OK' : 'COBRAR: R$ ' + activeOrder.total.toFixed(2)}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2">
                           <p className="text-xs text-brand font-bold uppercase tracking-widest">Cliente: {activeOrder.customerName}</p>
                           {currentPos && activeOrder.customerLocation && (

@@ -11,7 +11,6 @@ import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-goo
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { geocodeAddressFallback, getDistanceInMeters, getDeliveryFeeCalculation, reverseGeocode } from '../../lib/utils';
 import { subscribeToDeliveryConfig } from '../../lib/database';
-import MapaUrbanPrime from '../../components/shared/MapaUrbanPrime';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -237,27 +236,31 @@ export default function Checkout() {
     }
   };
 
+  const lookupCep = async (cepValue: string) => {
+    if (cepValue.length !== 8) return;
+    
+    setIsFetchingCep(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cepValue}/json/`);
+      const data = await response.json();
+      
+      if (!data.erro) {
+        const formattedAddress = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`;
+        setAddress(formattedAddress);
+        await handleGeocodeCustomerAddress(formattedAddress, addressNumber);
+      }
+    } catch (err) {
+      console.error("CEP lookup failed", err);
+    } finally {
+      setIsFetchingCep(false);
+    }
+  };
+
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '').substring(0, 8);
     setCep(value);
-
     if (value.length === 8) {
-      setIsFetchingCep(true);
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${value}/json/`);
-        const data = await response.json();
-        
-        if (!data.erro) {
-          // Format: Rua, Bairro, Cidade - UF
-          const formattedAddress = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`;
-          setAddress(formattedAddress);
-          await handleGeocodeCustomerAddress(formattedAddress, addressNumber);
-        }
-      } catch (err) {
-        console.error("CEP lookup failed", err);
-      } finally {
-        setIsFetchingCep(false);
-      }
+      await lookupCep(value);
     }
   };
 
@@ -273,12 +276,33 @@ export default function Checkout() {
         const lng = pos.coords.longitude;
         setCustomerLocation({ lat, lng });
         
-        // Reverse geocode to show address to user
-        const addressText = await reverseGeocode(lat, lng, googleMapsKey);
-        if (addressText) {
-           setAddress(addressText);
-           // Clear number since reverse geocoded addresses often bundle it or might be approximate
-           setAddressNumber(''); 
+        const addressData = await reverseGeocode(lat, lng, googleMapsKey);
+        if (addressData) {
+           // Define address with standard format (Street, Neighborhood, City - UF)
+           setAddress(addressData.formattedAddress);
+           
+           // If we have a number, put it in the number field
+           if (addressData.number) {
+             setAddressNumber(addressData.number);
+           } else {
+             setAddressNumber(''); // Reset if google doesn't know the exact house number
+           }
+
+           // Update CEP if found
+           if (addressData.cep) {
+             setCep(addressData.cep.replace(/\D/g, ''));
+           }
+
+           // Calculate delivery fee with the new coordinates
+           const baseLat = deliveryConfig?.baseLocation?.lat || storeConfig?.lat;
+           const baseLng = deliveryConfig?.baseLocation?.lng || storeConfig?.lng;
+           if (baseLat && baseLng) {
+             const dist = getDistanceInMeters(lat, lng, baseLat, baseLng) / 1000;
+             const fee = getDeliveryFeeCalculation(dist, deliveryConfig, total);
+             setCurrentDeliveryFee(fee);
+           }
+        } else {
+           alert("Não conseguimos identificar seu endereço exato. Por favor, digite manualmente.");
         }
 
         setIsLocating(false);
@@ -468,17 +492,9 @@ export default function Checkout() {
               </div>
 
               {customerLocation && !isOutOfRange && (
-                <div className="mt-3 overflow-hidden rounded-2xl border-2 border-brand/20 bg-white">
-                  <div className="w-full">
-                     <MapaUrbanPrime 
-                        customerCoords={customerLocation} 
-                        height="180px"
-                     />
-                  </div>
-                  <p className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-3 py-2 flex items-center gap-2 border-t border-brand/10">
-                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0" />
-                    Garantimos que o entregador encontrará sua posição exata pelo mapa.
-                  </p>
+                <div className="mt-2 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  Garantimos que o entregador encontrará sua posição exata.
                 </div>
               )}
               {isOutOfRange && (

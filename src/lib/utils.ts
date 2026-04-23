@@ -54,13 +54,62 @@ export async function geocodeAddressFallback(address: string, googleKey?: string
   return null;
 }
 
-export async function reverseGeocode(lat: number, lng: number, googleKey?: string): Promise<string | null> {
+export interface GeocodedAddress {
+  formattedAddress: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  cep?: string;
+}
+
+export async function reverseGeocode(lat: number, lng: number, googleKey?: string): Promise<GeocodedAddress | null> {
   if (googleKey) {
     try {
-      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleKey}`);
+      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleKey}&language=pt-BR`);
       const data = await res.json();
-      if (data.status === 'OK' && data.results && data.results[0]) {
-        return data.results[0].formatted_address;
+      
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        // Find the best result (street_address or route)
+        const bestResult = data.results.find((r: any) => 
+          r.types.includes('street_address') || 
+          r.types.includes('route') ||
+          r.types.includes('premise')
+        ) || data.results[0];
+
+        const components = bestResult.address_components;
+        
+        let street = '';
+        let number = '';
+        let neighborhood = '';
+        let city = '';
+        let state = '';
+        let cep = '';
+
+        components.forEach((c: any) => {
+          if (c.types.includes('route')) street = c.long_name;
+          if (c.types.includes('street_number')) number = c.long_name;
+          if (c.types.includes('sublocality_level_1')) neighborhood = c.long_name;
+          if (c.types.includes('administrative_area_level_2')) city = c.long_name;
+          if (c.types.includes('administrative_area_level_1')) state = c.short_name;
+          if (c.types.includes('postal_code')) cep = c.long_name.replace(/\D/g, '');
+        });
+
+        // Brazilian Standard: Rua, Numero - Bairro, Cidade - UF
+        const formattedAddress = street ? 
+          `${street}${number ? ', ' + number : ''}${neighborhood ? ' - ' + neighborhood : ''}, ${city} - ${state}` : 
+          bestResult.formatted_address;
+
+        return {
+          formattedAddress,
+          street,
+          number,
+          neighborhood,
+          city,
+          state,
+          cep
+        };
       }
     } catch (e) {
       console.error('Reverse Geocode failed', e);
