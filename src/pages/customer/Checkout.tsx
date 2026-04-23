@@ -9,8 +9,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import IdentifyModal from '../../components/IdentifyModal';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import { geocodeAddressFallback, getDistanceInMeters, getDeliveryFeeCalculation } from '../../lib/utils';
+import { geocodeAddressFallback, getDistanceInMeters, getDeliveryFeeCalculation, reverseGeocode } from '../../lib/utils';
 import { subscribeToDeliveryConfig } from '../../lib/database';
+import MapaUrbanPrime from '../../components/shared/MapaUrbanPrime';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -267,8 +268,19 @@ export default function Checkout() {
   const handleGetLocation = () => {
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCustomerLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCustomerLocation({ lat, lng });
+        
+        // Reverse geocode to show address to user
+        const addressText = await reverseGeocode(lat, lng, googleMapsKey);
+        if (addressText) {
+           setAddress(addressText);
+           // Clear number since reverse geocoded addresses often bundle it or might be approximate
+           setAddressNumber(''); 
+        }
+
         setIsLocating(false);
       },
       (err) => {
@@ -456,10 +468,18 @@ export default function Checkout() {
               </div>
 
               {customerLocation && !isOutOfRange && (
-                <p className="mt-2 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  Garantimos que o entregador encontrará sua posição exata.
-                </p>
+                <div className="mt-3 overflow-hidden rounded-2xl border-2 border-brand/20 bg-white">
+                  <div className="w-full">
+                     <MapaUrbanPrime 
+                        customerCoords={customerLocation} 
+                        height="180px"
+                     />
+                  </div>
+                  <p className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-3 py-2 flex items-center gap-2 border-t border-brand/10">
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0" />
+                    Garantimos que o entregador encontrará sua posição exata pelo mapa.
+                  </p>
+                </div>
               )}
               {isOutOfRange && (
                 <motion.div 

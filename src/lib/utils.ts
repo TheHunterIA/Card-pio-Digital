@@ -54,6 +54,21 @@ export async function geocodeAddressFallback(address: string, googleKey?: string
   return null;
 }
 
+export async function reverseGeocode(lat: number, lng: number, googleKey?: string): Promise<string | null> {
+  if (googleKey) {
+    try {
+      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${googleKey}`);
+      const data = await res.json();
+      if (data.status === 'OK' && data.results && data.results[0]) {
+        return data.results[0].formatted_address;
+      }
+    } catch (e) {
+      console.error('Reverse Geocode failed', e);
+    }
+  }
+  return null;
+}
+
 export interface DeliveryRadius {
   id: string;
   maxDistance: number;
