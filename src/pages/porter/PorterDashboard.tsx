@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs, writeBatch, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { finalizeOrder } from '../../lib/database';
@@ -31,6 +31,7 @@ export default function PorterDashboard() {
   
   const [config, setConfig] = useState<any>(null);
   const orders = useStore(state => state.orders);
+  const [scannerInstance, setScannerInstance] = useState<Html5Qrcode | null>(null);
 
   useEffect(() => {
     return onSnapshot(doc(db, 'settings', 'config'), (snap) => {
@@ -40,7 +41,7 @@ export default function PorterDashboard() {
 
   const tables = useMemo(() => {
     if (!config) return [];
-    const count = config?.tablesCount || 10; // Default to 10 if not set
+    const count = config?.tablesCount || 10;
     return Array.from({ length: count }, (_, i) => ({
       id: (i + 1).toString(),
       label: `Mesa ${i + 1}`
@@ -58,29 +59,43 @@ export default function PorterDashboard() {
     return map;
   }, [orders]);
 
+  // Modern Scanner Logic
   useEffect(() => {
-    if (!scanning || viewMode !== 'scanner') return;
+    if (viewMode !== 'scanner' || !scanning || scanResult) return;
 
-    const scanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      false
-    );
+    const html5QrCode = new Html5Qrcode("reader");
+    setScannerInstance(html5QrCode);
 
-    const onScanSuccess = async (decodedText: string) => {
-      scanner.clear();
-      setScanning(false);
-      validatePass(decodedText);
+    const startScanner = async () => {
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+          },
+          (decodedText) => {
+            html5QrCode.stop().then(() => {
+              setScanning(false);
+              validatePass(decodedText);
+            });
+          },
+          undefined
+        );
+      } catch (err) {
+        console.error("Scanner start error", err);
+      }
     };
 
-    scanner.render(onScanSuccess, (err) => {
-      // Ignore phantom errors
-    });
+    startScanner();
 
     return () => {
-      scanner.clear().catch(e => console.error("Scanner clear error", e));
+      if (html5QrCode.isScanning) {
+        html5QrCode.stop().catch(console.error);
+      }
     };
-  }, [scanning]);
+  }, [viewMode, scanning, scanResult]);
 
   const handleTableClick = (tableId: string) => {
     setError(null);
@@ -389,254 +404,323 @@ export default function PorterDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Porter Navigation */}
-      <div className="max-w-4xl mx-auto px-6 pt-4">
-        <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex gap-2">
+    <div className="min-h-screen bg-[#0A0A0B] text-white p-4 md:p-8 font-mono">
+      {/* Header / Mission Control Status */}
+      <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/10 pb-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-3 h-3 bg-brand rounded-full animate-pulse shadow-[0_0_12px_rgba(255,78,0,0.5)]" />
+            <span className="text-[10px] font-bold tracking-[0.3em] text-white/40 uppercase">System Status: Active</span>
+          </div>
+          <h1 className="text-4xl font-black italic tracking-tighter uppercase leading-none">
+            Porter <span className="text-brand">Protocol</span>
+          </h1>
+        </div>
+
+        <nav className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10 backdrop-blur-xl">
           <button 
             onClick={() => { setViewMode('scanner'); handleReset(); }}
-            className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl font-display font-black uppercase tracking-widest text-[10px] transition-all ${
-              viewMode === 'scanner' ? 'bg-ink text-white shadow-lg' : 'bg-transparent text-ink-muted hover:bg-oat'
+            className={`px-8 py-3 rounded-xl flex items-center gap-2 transition-all text-[11px] font-black uppercase tracking-widest ${
+              viewMode === 'scanner' ? 'bg-white text-black' : 'text-white/40 hover:text-white'
             }`}
           >
-            <QrCode className="w-5 h-5" /> Scanner
+            <QrCode className="w-4 h-4" /> Scanner
           </button>
           <button 
             onClick={() => { setViewMode('tables'); handleReset(); }}
-            className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl font-display font-black uppercase tracking-widest text-[10px] transition-all ${
-              viewMode === 'tables' ? 'bg-ink text-white shadow-lg' : 'bg-transparent text-ink-muted hover:bg-oat'
+            className={`px-8 py-3 rounded-xl flex items-center gap-2 transition-all text-[11px] font-black uppercase tracking-widest ${
+              viewMode === 'tables' ? 'bg-white text-black' : 'text-white/40 hover:text-white'
             }`}
           >
-            <LayoutGrid className="w-5 h-5" /> Gestão de Mesas
+            <LayoutGrid className="w-4 h-4" /> Fleet Management
           </button>
-        </div>
-      </div>
+        </nav>
+      </header>
 
-      <div className="grid md:grid-cols-2 gap-8 items-start p-6 max-w-4xl mx-auto space-y-8">
-        
-        {/* Left Side: Scanner or Tables Grid */}
-        <div className="space-y-6">
-          {viewMode === 'scanner' ? (
-            <div className="bg-white rounded-[40px] p-8 border border-black/5 shadow-xl overflow-hidden relative">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="font-display font-bold text-ink flex items-center gap-2">
-                  <QrCode className="w-5 h-5 text-blue-600" /> Scanner de Saída
-                </h2>
-                {scanning && (
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Ativo</span>
-                  </div>
-                )}
-              </div>
-
-              <div id="reader" className={`${!scanning ? 'hidden' : ''} rounded-3xl overflow-hidden border-2 border-dashed border-black/10`} />
-              
-              {!scanning && (
-                <div className="py-20 flex flex-col items-center justify-center text-center">
-                   <button 
-                    onClick={handleReset}
-                    className="bg-ink text-white px-8 py-4 rounded-2xl font-display font-bold uppercase tracking-widest text-xs flex items-center gap-3 active:scale-95 transition-all shadow-xl"
-                   >
-                     <RefreshCw className="w-4 h-4" /> Novo Escaneamento
-                   </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="bg-white rounded-[40px] p-8 border border-black/5 shadow-xl overflow-hidden relative min-h-[400px]">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="font-display font-bold text-ink flex items-center gap-2">
-                  <LayoutGrid className="w-5 h-5 text-brand" /> Gestão de Mesas
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                {tables.map(table => {
-                   const tableOrders = activeOrdersByTable[table.id] || [];
-                   const isOccupied = tableOrders.length > 0;
-                   const hasPending = tableOrders.some(o => o.paymentStatus !== 'paid');
-                   const hasReady = tableOrders.some(o => o.status === 'pronto-entrega' || o.status === 'saiu-entrega');
-
-                   return (
-                     <motion.button
-                       key={table.id}
-                       whileHover={{ scale: 1.05 }}
-                       whileTap={{ scale: 0.95 }}
-                       onClick={() => handleTableClick(table.id)}
-                       className={`aspect-square rounded-3xl border-2 flex flex-col items-center justify-center gap-1 transition-all relative ${
-                         hasReady 
-                           ? 'bg-brand border-brand text-white shadow-lg animate-pulse'
-                           : hasPending 
-                             ? 'bg-amber-50 border-amber-200 text-amber-700 shadow-sm'
-                             : isOccupied 
-                               ? 'bg-ink border-ink text-white shadow-md'
-                               : 'bg-oat/50 border-black/5 text-ink-muted hover:border-brand/30'
-                       }`}
-                     >
-                        <span className="font-display font-black text-2xl">{table.id}</span>
-                        <div className="flex gap-1">
-                          {hasPending && <ShieldAlert className="w-3 h-3" />}
-                          {isOccupied && !hasPending && <CheckCircle2 className="w-3 h-3" />}
-                        </div>
-                        <span className="text-[7px] font-black uppercase tracking-widest mt-1 opacity-60">
-                           {hasReady ? 'Pronto' : hasPending ? 'Pendente' : isOccupied ? 'Ativa' : 'Livre'}
-                        </span>
-                     </motion.button>
-                   );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-white/50 border border-black/5 rounded-[32px] p-6 text-[11px] font-medium text-ink-muted leading-relaxed">
-            <ShieldCheck className="w-4 h-4 mb-2 opacity-50" />
-            <p>Este terminal valida apenas tokens <strong>Urban Prime</strong> gerados no dia corrente. Se o cliente apresentar um print antigo, o sistema acusará expiração automaticamente.</p>
-          </div>
-        </div>
-
-        {/* Results Section */}
-        <div className="space-y-6">
+      <main className="max-w-6xl mx-auto grid lg:grid-cols-[1fr,420px] gap-8">
+        {/* Primary View Area */}
+        <section className="space-y-6">
           <AnimatePresence mode="wait">
-            {validating ? (
+            {viewMode === 'scanner' ? (
               <motion.div 
-                key="validating"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="bg-white rounded-[40px] p-12 text-center border border-black/5 shadow-xl"
-              >
-                <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-6" />
-                <p className="font-display font-bold text-ink uppercase tracking-widest text-sm">Validando Token...</p>
-              </motion.div>
-            ) : error ? (
-              <motion.div 
-                key="error"
-                initial={{ opacity: 0, scale: 0.95 }}
+                key="scanner-view"
+                initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="bg-red-50 rounded-[40px] p-10 border border-red-100 text-center shadow-xl shadow-red-500/5"
+                exit={{ opacity: 0, scale: 0.98 }}
+                className="relative group"
               >
-                <div className="w-20 h-20 bg-red-100 text-red-600 rounded-[32px] flex items-center justify-center mx-auto mb-6">
-                  <ShieldAlert className="w-10 h-10" />
-                </div>
-                <h3 className="text-2xl font-display font-black text-red-600 mb-2 tracking-tight italic uppercase">ACESSO NEGADO</h3>
-                <p className="text-red-500 font-bold mb-8">{error}</p>
-                <button 
-                  onClick={handleReset}
-                  className="w-full bg-red-600 text-white h-14 rounded-2xl font-display font-bold uppercase tracking-widest text-xs shadow-lg active:scale-95 transition-all"
-                >
-                  Tentar Novamente
-                </button>
-              </motion.div>
-            ) : scanResult ? (
-              <motion.div 
-                key="result"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={`rounded-[40px] p-10 border text-center shadow-2xl relative overflow-hidden ${
-                  scanResult.isValid ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'
-                }`}
-              >
-                {/* Header Decoration */}
-                <div className={`absolute top-0 left-0 w-full h-2 ${scanResult.isValid ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-
-                <div className={`w-24 h-24 rounded-[40px] flex items-center justify-center mx-auto mb-8 shadow-inner ${
-                  scanResult.isValid ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
-                }`}>
-                  {scanResult.isValid ? <CheckCircle2 className="w-12 h-12" /> : <ShieldAlert className="w-12 h-12" />}
-                </div>
-
-                <h3 className={`text-4xl font-display font-black mb-1 tracking-tighter italic ${
-                  scanResult.isValid ? 'text-emerald-700' : 'text-amber-700'
-                }`}>
-                  {scanResult.isValid ? 'LIBERADO' : 'BLOQUEADO'}
-                </h3>
-                <p className={`font-display font-bold text-xs uppercase tracking-[0.2em] mb-8 ${
-                  scanResult.isValid ? 'text-emerald-600' : 'text-amber-600'
-                }`}>
-                  {scanResult.isVisitor ? 'VISITANTE - CONSUMO ZERO' : (scanResult.isValid ? 'SAÍDA AUTORIZADA' : scanResult.error)}
-                </p>
-
-                {scanResult.warning && (
-                  <div className="bg-amber-100/50 border border-amber-200 text-amber-800 p-4 rounded-2xl mb-6 text-xs font-bold uppercase tracking-widest text-left flex gap-3">
-                    <ShieldAlert className="w-5 h-5 shrink-0 text-amber-600" />
-                    <span>{scanResult.warning}</span>
+                {/* Modern Scanner UI Frame */}
+                <div className="bg-[#141416] rounded-[32px] border border-white/5 overflow-hidden shadow-2xl">
+                  <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+                        <QrCode className="w-5 h-5 text-white/60" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold uppercase tracking-widest leading-none">Optical Input</h3>
+                        <p className="text-[10px] text-white/30 uppercase mt-1">Awaiting digital pass signature</p>
+                      </div>
+                    </div>
                   </div>
-                )}
 
-                {/* Details Card */}
-                <div className="bg-white rounded-3xl p-6 shadow-sm border border-black/5 text-left space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-oat rounded-xl flex items-center justify-center text-ink-muted">
-                      <User className="w-5 h-5" />
+                  <div className="relative aspect-video md:aspect-[16/10] bg-black">
+                    <div id="reader" className="w-full h-full object-cover grayscale opacity-80" />
+                    
+                    {/* Scanning Overlay Visuals */}
+                    <AnimatePresence>
+                      {scanning && !scanResult && (
+                        <motion.div 
+                          className="absolute inset-0 z-10 pointer-events-none"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                        >
+                          <div className="absolute inset-0 border-[40px] border-black/40" />
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border border-white/20">
+                            {/* Corner Accents */}
+                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand -translate-x-2 -translate-y-2" />
+                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand translate-x-2 -translate-y-2" />
+                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand -translate-x-2 translate-y-2" />
+                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand translate-x-2 translate-y-2" />
+                            
+                            {/* Scanning Animation Line */}
+                            <motion.div 
+                              className="w-full h-1 bg-brand/50 shadow-[0_0_15px_rgba(255,78,0,0.8)]"
+                              animate={{ top: ['0%', '100%'] }}
+                              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {!scanning && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-20">
+                        <button 
+                          onClick={handleReset}
+                          className="px-10 py-5 bg-white text-black rounded-full font-black uppercase tracking-[0.2em] text-xs hover:scale-105 active:scale-95 transition-all shadow-2xl flex items-center gap-3"
+                        >
+                          <RefreshCw className="w-4 h-4" /> Reset Sequence
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-8 grid md:grid-cols-2 gap-8 bg-white/[0.02]">
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Protocol Instructions</span>
+                      <p className="text-xs leading-relaxed text-white/50 italic font-medium">
+                        Position the digital pass QR within the sensor view. Today's signature is mandatory. Expired or duplicate tokens will be rejected by the firewall.
+                      </p>
+                    </div>
+                    <div className="flex flex-col justify-end items-end gap-2">
+                       <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Security Layer</span>
+                       <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-white/5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <span className="text-[9px] font-black uppercase tracking-[0.1em]">Encrypted Handshake OK</span>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="tables-view"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="bg-[#141416] rounded-[32px] border border-white/5 p-8 overflow-hidden shadow-2xl"
+              >
+                <div className="flex items-center justify-between mb-10">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-brand/10 border border-brand/20 rounded-2xl flex items-center justify-center">
+                      <LayoutGrid className="w-6 h-6 text-brand" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest">Cliente</p>
-                      <p className="font-display font-bold text-ink">{scanResult.customerName}</p>
+                      <h2 className="text-xl font-black italic tracking-tighter uppercase leading-none">Fleet Grid</h2>
+                      <p className="text-[10px] text-white/30 uppercase mt-1 tracking-widest font-bold">Real-time table distribution</p>
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-oat rounded-xl flex items-center justify-center text-ink-muted">
-                      <Utensils className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest">Local</p>
-                      <p className="font-display font-bold text-ink">Mesa {scanResult.tableNumber}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 pt-4 border-t border-black/5">
-                    <div className="w-10 h-10 bg-oat rounded-xl flex items-center justify-center text-ink-muted">
-                      <Clock className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest">Valor do Pedido</p>
-                      <p className="font-display font-bold text-ink">R$ {scanResult.total?.toFixed(2)}</p>
-                    </div>
+                  <div className="flex gap-4">
+                     {[
+                       { label: 'Free', color: 'bg-white/10' },
+                       { label: 'Active', color: 'bg-white' },
+                       { label: 'Pending', color: 'bg-amber-500' }
+                     ].map(l => (
+                       <div key={l.label} className="flex items-center gap-2">
+                         <div className={`w-2 h-2 ${l.color} rounded-full`} />
+                         <span className="text-[9px] font-black uppercase text-white/40 tracking-widest">{l.label}</span>
+                       </div>
+                     ))}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-3 mt-10">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-6">
+                  {tables.map(table => {
+                    const tableOrders = activeOrdersByTable[table.id] || [];
+                    const isOccupied = tableOrders.length > 0;
+                    const hasPending = tableOrders.some(o => o.paymentStatus !== 'paid');
+                    const hasReady = tableOrders.some(o => o.status === 'pronto-entrega' || o.status === 'saiu-entrega');
+
+                    return (
+                      <button
+                        key={table.id}
+                        onClick={() => handleTableClick(table.id)}
+                        className={`aspect-square rounded-[24px] border-2 transition-all group relative flex flex-col items-center justify-center gap-1 ${
+                          hasReady 
+                            ? 'bg-brand border-brand text-white shadow-[0_0_30px_rgba(255,78,0,0.3)] animate-pulse'
+                            : hasPending 
+                              ? 'bg-amber-500 border-amber-500 text-black'
+                              : isOccupied 
+                                ? 'bg-white border-white text-black'
+                                : 'bg-transparent border-white/10 text-white/20 hover:border-white/40 hover:text-white'
+                        }`}
+                      >
+                        <span className="text-2xl font-black italic">{table.id}</span>
+                        <div className="w-1 h-1 rounded-full bg-current opacity-30 mt-1" />
+                        
+                        {/* Status Tip */}
+                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-brand text-white text-[8px] font-black px-2 py-1 rounded-full pointer-events-none z-50">
+                           {isOccupied ? (hasPending ? 'PAYMENT REQUIRED' : 'CLEARANCE READY') : 'VACANT'}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+
+        {/* Intelligence / Results Sidebar */}
+        <aside className="space-y-6">
+          <AnimatePresence mode="wait">
+            {!scanResult && !error && !validating ? (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-white/5 border border-white/5 rounded-[32px] p-8 text-center italic"
+              >
+                 <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <ShieldCheck className="w-8 h-8 text-white/10" />
+                 </div>
+                 <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] leading-relaxed">
+                    System Idle. Awaiting data stream from scanner or manual selection.
+                 </p>
+              </motion.div>
+            ) : validating ? (
+              <div className="bg-white/5 border border-white/5 rounded-[32px] p-12 text-center">
+                 <div className="w-10 h-10 border-2 border-white/10 border-t-white rounded-full animate-spin mx-auto mb-6" />
+                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white animate-pulse">Analyzing Signature...</span>
+              </div>
+            ) : error ? (
+              <motion.div 
+                initial={{ x: 20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                className="bg-red-500/10 border-2 border-red-500/20 rounded-[32px] p-8"
+              >
+                <div className="w-14 h-14 bg-red-500 text-white rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-red-500/40">
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-black italic tracking-tighter uppercase leading-none text-red-500 mb-4">Integrity Error</h3>
+                <p className="text-xs leading-relaxed text-red-500/70 font-bold uppercase tracking-tight mb-8">
+                  {error}
+                </p>
+                <button 
+                  onClick={handleReset}
+                  className="w-full h-14 border border-red-500 text-red-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-red-500 hover:text-white transition-all shadow-xl shadow-red-500/10"
+                >
+                  Clear Fault
+                </button>
+              </motion.div>
+            ) : scanResult && (
+              <motion.div 
+                initial={{ x: 20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                className={`rounded-[32px] p-8 border-2 shadow-2xl relative ${
+                  scanResult.isValid ? 'bg-emerald-500' : 'bg-amber-500'
+                } text-black`}
+              >
+                <div className="flex items-start justify-between mb-8">
+                  <div className="w-16 h-16 bg-black/10 rounded-2xl flex items-center justify-center">
+                    {scanResult.isValid ? <ShieldCheck className="w-10 h-10" /> : <ShieldAlert className="w-10 h-10" />}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] font-black uppercase tracking-widest opacity-60">Status Code</span>
+                    <h4 className="text-xl font-black uppercase leading-none mt-1">
+                      {scanResult.isValid ? 'Success' : 'Violated'}
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="space-y-6 mb-10">
+                   <div className="pb-4 border-b border-black/10">
+                      <span className="text-[9px] font-black uppercase tracking-widest opacity-50 block mb-1">Subject / Table</span>
+                      <p className="text-2xl font-black tracking-tighter italic uppercase">{scanResult.customerName}</p>
+                   </div>
+                   
+                   <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest opacity-50 block mb-1">Total Payload</span>
+                        <p className="text-lg font-black tracking-tight leading-none">R$ {scanResult.total?.toFixed(2)}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] font-black uppercase tracking-widest opacity-50 block mb-1">Pass Type</span>
+                        <p className="text-sm font-bold uppercase tracking-tight leading-none italic">
+                          {scanResult.isVisitor ? 'Visitor' : 'Standard'}
+                        </p>
+                      </div>
+                   </div>
+
+                   {scanResult.warning && (
+                     <div className="bg-black/5 p-4 rounded-xl border border-black/10">
+                        <p className="text-[10px] font-black uppercase leading-tight italic">{scanResult.warning}</p>
+                     </div>
+                   )}
+                </div>
+
+                <div className="flex flex-col gap-3">
                   {scanResult.isValid && (
                     <button 
                       onClick={handleFinalizeRelease}
                       disabled={isFinalizing}
-                      className="w-full h-16 bg-emerald-600 text-white rounded-2xl font-display font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                      className="w-full h-16 bg-black text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
                     >
                       {isFinalizing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                      {isFinalizing ? 'FINALIZANDO...' : 'CONFIRMAR LIBERAÇÃO'}
+                      {isFinalizing ? 'Finalizing...' : 'Authorize Exit'}
                     </button>
                   )}
 
                   <button 
                     onClick={handleReset}
-                    className={`w-full h-14 rounded-2xl font-display font-bold uppercase tracking-widest text-[10px] active:scale-95 transition-all border-2 ${
-                      scanResult.isValid 
-                        ? 'border-emerald-600/20 text-emerald-700 bg-white' 
-                        : 'bg-amber-600 text-white shadow-lg'
-                    }`}
+                    className="w-full h-14 border border-black/10 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-black/5 transition-all"
                   >
-                    {scanResult.isValid ? 'VOLTAR AO SCANNER' : 'OK - PRÓXIMO CLIENTE'}
+                    Cancel / Reset
                   </button>
                 </div>
               </motion.div>
-            ) : (
-              <motion.div 
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-oat/50 border-2 border-dashed border-black/5 rounded-[40px] p-20 text-center"
-              >
-                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                   <QrCode className="w-8 h-8 text-ink-muted/30" />
-                </div>
-                <h3 className="font-display font-bold text-ink-muted text-sm uppercase tracking-widest">Aguardando Leitura...</h3>
-              </motion.div>
             )}
           </AnimatePresence>
-        </div>
-      </div>
+
+          {/* System Telemetry */}
+          <div className="bg-[#141416] p-6 rounded-[32px] border border-white/5 space-y-4">
+             <div className="flex items-center justify-between">
+                <span className="text-[9px] font-black uppercase tracking-widest text-white/30 italic">Porter Logs</span>
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+             </div>
+             <div className="space-y-3">
+                {orders.slice(0, 3).map(o => (
+                  <div key={o.id} className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tight pb-3 border-b border-white/5 last:border-0 opacity-60">
+                    <span className="text-white/40">#{o.id.slice(-4)} {o.tableNumber ? `TB-${o.tableNumber}` : 'DELV'}</span>
+                    <span className={o.paymentStatus === 'paid' ? 'text-emerald-500' : 'text-amber-500'}>
+                       {o.paymentStatus}
+                    </span>
+                  </div>
+                ))}
+             </div>
+          </div>
+        </aside>
+      </main>
     </div>
   );
 }
