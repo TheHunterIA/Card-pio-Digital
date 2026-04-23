@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
-import { finalizeOrder, markManualPayment, syncManualClient } from '../../lib/database';
-import { ChevronLeft, Receipt, QrCode, CheckCircle2, Utensils, Printer, ShieldCheck, AlertCircle, MessageCircle, Send, X as CloseIcon, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { finalizeOrder, markManualPayment, syncManualClient, updateOrderStatus } from '../../lib/database';
+import { ChevronLeft, Receipt, QrCode, CheckCircle2, Utensils, Printer, ShieldCheck, AlertCircle, MessageCircle, Send, X as CloseIcon, Image as ImageIcon, Loader2, BellRing } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -319,14 +319,31 @@ export default function WaiterBill() {
                   <div>
                     <h3 className="font-display font-black text-ink uppercase tracking-tight text-lg mb-1">{order.customerName || 'Cliente'}</h3>
                     <p className="font-mono text-ink-muted text-xs font-bold uppercase tracking-widest">Pedido #{order.id.slice(0, 4)}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className={`w-2 h-2 rounded-full ${order.status === 'preparando' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
-                      <span className="text-[10px] font-black uppercase text-ink-muted tracking-widest">{order.status}</span>
-                    </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        {order.status === 'saiu-entrega' || order.status === 'pronto-entrega' ? (
+                          <div className="flex items-center gap-1.5 bg-brand text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse">
+                            <BellRing className="w-2.5 h-2.5" /> Pronto para Retirar
+                          </div>
+                        ) : (
+                          <>
+                            <span className={`w-2 h-2 rounded-full ${order.status === 'preparando' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
+                            <span className="text-[10px] font-black uppercase text-ink-muted tracking-widest">{order.status}</span>
+                          </>
+                        )}
+                      </div>
                   </div>
                   
-                  <div className="flex flex-col gap-2 items-end">
-                    {order.paymentStatus === 'pending' ? (
+                    <div className="flex flex-col gap-2 items-end">
+                      {(order.status === 'saiu-entrega' || order.status === 'pronto-entrega') && (
+                        <button 
+                          onClick={() => updateOrderStatus(order.id, 'servido')}
+                          className="flex items-center gap-2 bg-brand text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-light transition-all shadow-md active:scale-95"
+                        >
+                          <Utensils className="w-4 h-4" /> Entregue na Mesa
+                        </button>
+                      )}
+                      
+                      {order.paymentStatus === 'pending' ? (
                       <button 
                         onClick={() => markManualPayment(order.id)}
                         className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm"

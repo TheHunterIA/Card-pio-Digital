@@ -223,9 +223,22 @@ export const useStore = create<AppState>()(
   whatsapp: '',
   setWhatsapp: (whatsapp) => set({ whatsapp }),
   orderType: 'delivery',
-  setOrderType: (type) => set({ orderType: type }),
+  setOrderType: (type) => set((state) => {
+    // Prevent switching to delivery if there's a table session active
+    if (type === 'delivery' && state.tableNumber) {
+      console.warn("Cannot switch to delivery with an active table session");
+      return {};
+    }
+    return { orderType: type };
+  }),
   tableNumber: '',
-  setTableNumber: (table) => set({ tableNumber: table }),
+  setTableNumber: (table) => set((state) => {
+    // If table is being set, force orderType to dine-in
+    if (table) {
+      return { tableNumber: table, orderType: 'dine-in' };
+    }
+    return { tableNumber: table };
+  }),
   waiterName: '',
   setWaiterName: (name) => set({ waiterName: name }),
   requireUpfrontPayment: false,

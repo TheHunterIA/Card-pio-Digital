@@ -34,17 +34,58 @@ h1, h2, h3, h4, .font-display {
   scrollbar-width: none;
 }
 
-@media screen {
-  .print-only {
-    display: none !important;
-  }
-}
-
 @media print {
-  .no-print {
+  /* Reset body/html for clean printing */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide UI elements - menus, buttons, bars */
+  nav, footer, aside, header:not(.print-header), 
+  button, .no-print, .print\:hidden,
+  [role="status"] {
     display: none !important;
   }
-  body {
-    background: white !important;
+
+  /* Thermal Print Logic */
+  .thermal-print-container {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 80mm !important;
+    display: block !important;
+    visibility: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    z-index: 9999 !important;
+  }
+
+  /* If a thermal container exists, hide everything else via visibility to allow nested showing */
+  body:has(.thermal-print-container) #root {
+    visibility: hidden !important;
+  }
+  
+  body:has(.thermal-print-container) .thermal-print-container {
+    visibility: visible !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 80mm !important;
+  }
+
+  /* For non-thermal prints (like A4 QR Codes), ensure they layout correctly */
+  .print-section {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  @page {
+    margin: 0;
+    size: auto;
   }
 }

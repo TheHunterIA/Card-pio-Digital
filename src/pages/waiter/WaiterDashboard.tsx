@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
-import { LayoutGrid, Utensils, MessageCircle, AlertCircle, ShieldCheck, Printer, X, CheckCircle2 } from 'lucide-react';
+import { LayoutGrid, Utensils, MessageCircle, AlertCircle, ShieldCheck, Printer, X, CheckCircle2, BellRing, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -47,7 +47,7 @@ export default function WaiterDashboard() {
   const alerts = useMemo(() => {
     return orders.filter(o => 
       o.status !== 'finalizado' && o.status !== 'cancelado' && 
-      (o.billRequested || o.status === 'pronto-entrega')
+      (o.billRequested || o.status === 'pronto-entrega' || (o.type === 'dine-in' && o.status === 'saiu-entrega'))
     );
   }, [orders]);
 
@@ -102,6 +102,7 @@ export default function WaiterDashboard() {
             const isOccupied = tableOrders.length > 0;
             const pendingPix = tableOrders.some(o => o.paymentMethod === 'pix' && o.paymentStatus === 'pending');
             const hasBillRequest = tableOrders.some(o => o.billRequested);
+            const hasReadyOrder = tableOrders.some(o => o.status === 'saiu-entrega' || o.status === 'pronto-entrega');
 
             return (
               <motion.div
@@ -110,23 +111,29 @@ export default function WaiterDashboard() {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => handleTableClick(table.id)}
                 className={`relative overflow-hidden aspect-square rounded-[32px] border-2 transition-all p-4 flex flex-col items-center justify-center gap-2 cursor-pointer ${
-                  isOccupied 
-                    ? 'bg-ink border-ink text-white shadow-xl rotate-1' 
-                    : 'bg-white border-black/5 text-ink hover:border-brand/30'
+                  hasReadyOrder
+                    ? 'bg-brand border-brand text-white shadow-[0_0_30px_rgba(255,78,0,0.3)] animate-pulse'
+                    : isOccupied 
+                      ? 'bg-ink border-ink text-white shadow-xl rotate-1' 
+                      : 'bg-white border-black/5 text-ink hover:border-brand/30'
                 }`}
               >
-                <span className={`font-display font-black text-3xl ${isOccupied ? 'text-white' : 'text-ink'}`}>
+                <div className="absolute top-2 right-2 flex gap-1">
+                   {hasReadyOrder && <BellRing className="w-4 h-4 text-white animate-bounce" />}
+                </div>
+
+                <span className={`font-display font-black text-3xl ${isOccupied || hasReadyOrder ? 'text-white' : 'text-ink'}`}>
                   {table.id}
                 </span>
                 
                 <div className="flex gap-2">
-                  {isOccupied && <Utensils className="w-4 h-4 text-brand" />}
+                  {isOccupied && !hasReadyOrder && <Utensils className="w-4 h-4 text-brand" />}
                   {pendingPix && <AlertCircle className="w-4 h-4 text-brand animate-pulse" />}
                   {hasBillRequest && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                 </div>
 
-                <div className={`mt-2 text-[9px] font-black uppercase tracking-[0.2em] ${isOccupied ? 'text-white/40' : 'text-ink-muted'}`}>
-                  {isOccupied ? 'Ativa' : 'Livre'}
+                <div className={`mt-2 text-[9px] font-black uppercase tracking-[0.2em] ${isOccupied || hasReadyOrder ? 'text-white/60' : 'text-ink-muted'}`}>
+                  {hasReadyOrder ? 'Pronto!' : isOccupied ? 'Ativa' : 'Livre'}
                 </div>
               </motion.div>
             );
@@ -148,6 +155,10 @@ export default function WaiterDashboard() {
           <div className="flex items-center gap-2">
              <AlertCircle className="w-4 h-4 text-brand" />
             <span className="text-xs font-medium text-ink-muted">Aguardando PIX</span>
+          </div>
+          <div className="flex items-center gap-2">
+             <BellRing className="w-4 h-4 text-brand" />
+            <span className="text-xs font-medium text-ink-muted">Pedido Pronto</span>
           </div>
           <div className="flex items-center gap-2">
              <CheckCircle2 className="w-4 h-4 text-emerald-500" />

@@ -22,6 +22,7 @@ export default function PorterDashboard() {
   const [scanning, setScanning] = useState(true);
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isFinalizing, setIsFinalizing] = useState(false);
 
   useEffect(() => {
     if (!scanning) return;
@@ -241,6 +242,45 @@ export default function PorterDashboard() {
     setScanResult(null);
     setError(null);
     setScanning(true);
+    setIsFinalizing(false);
+  };
+
+  const handleFinalizeRelease = async () => {
+    if (!scanResult) return;
+    setIsFinalizing(true);
+    
+    try {
+      if (scanResult.id.startsWith('TABLE-')) {
+        const tableId = scanResult.tableNumber;
+        const q = query(
+          collection(db, 'orders'),
+          where('tableNumber', '==', tableId),
+          where('status', 'not-in', ['finalizado', 'cancelado'])
+        );
+        const snap = await getDocs(q);
+        const batch = writeBatch(db);
+        snap.forEach(d => {
+          batch.update(d.ref, { 
+            status: 'finalizado', 
+            updatedAt: serverTimestamp() 
+          });
+        });
+        await batch.commit();
+
+        // Also closing the session if it exists
+        const sessionRef = doc(db, 'sessions', `table-${tableId}`);
+        await setDoc(sessionRef, { status: 'closed', closedAt: serverTimestamp() }, { merge: true });
+      } else if (!scanResult.isVisitor) {
+        await finalizeOrder(scanResult.id);
+      }
+      
+      handleReset();
+    } catch (e) {
+      console.error(e);
+      setError('Falha ao finalizar liberação.');
+    } finally {
+      setIsFinalizing(false);
+    }
   };
 
   return (
@@ -385,14 +425,29 @@ export default function PorterDashboard() {
                   </div>
                 </div>
 
-                <button 
-                  onClick={handleReset}
-                  className={`mt-10 w-full h-16 rounded-2xl font-display font-bold uppercase tracking-widest text-xs shadow-lg active:scale-95 transition-all ${
-                    scanResult.isValid ? 'bg-emerald-600 text-white' : 'bg-amber-600 text-white'
-                  }`}
-                >
-                  OK - Próximo Cliente
-                </button>
+                <div className="flex flex-col gap-3 mt-10">
+                  {scanResult.isValid && (
+                    <button 
+                      onClick={handleFinalizeRelease}
+                      disabled={isFinalizing}
+                      className="w-full h-16 bg-emerald-600 text-white rounded-2xl font-display font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      {isFinalizing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                      {isFinalizing ? 'FINALIZANDO...' : 'CONFIRMAR LIBERAÇÃO'}
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={handleReset}
+                    className={`w-full h-14 rounded-2xl font-display font-bold uppercase tracking-widest text-[10px] active:scale-95 transition-all border-2 ${
+                      scanResult.isValid 
+                        ? 'border-emerald-600/20 text-emerald-700 bg-white' 
+                        : 'bg-amber-600 text-white shadow-lg'
+                    }`}
+                  >
+                    {scanResult.isValid ? 'VOLTAR AO SCANNER' : 'OK - PRÓXIMO CLIENTE'}
+                  </button>
+                </div>
               </motion.div>
             ) : (
               <motion.div 

@@ -116,7 +116,7 @@ export default function QRCodes() {
   const tables = Array.from({ length: tableCount }, (_, i) => i + 1);
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full print:p-0 print:m-0 print:bg-white" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full print:p-0 print:m-0 print:bg-white print-section" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-8 pb-6 border-b border-black/5 print:hidden">
         <div>
           <h2 className="text-3xl font-display font-bold text-ink tracking-tight">QR Codes das Mesas</h2>

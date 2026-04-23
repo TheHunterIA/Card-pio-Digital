@@ -205,14 +205,17 @@ export async function placeOrder(paymentMethod: PaymentMethod, deliveryFee: numb
   await syncClientProfile();
 
   const deviceId = state.deviceId || 'anonymous-device';
-  const sessionId = state.currentSessionId || (state.orderType === 'dine-in' && state.tableNumber ? `table-${state.tableNumber}` : null);
+  
+  // FORCE dine-in if tableNumber is present - this prevents "dine-in turned delivery" bugs
+  const finalOrderType = state.tableNumber ? 'dine-in' : state.orderType;
+  const sessionId = state.currentSessionId || (finalOrderType === 'dine-in' && state.tableNumber ? `table-${state.tableNumber}` : null);
 
   const newOrder = {
     userId: user?.uid || deviceId,
     deviceId: deviceId, 
     ...(state.whatsapp && state.whatsapp.length >= 8 ? { whatsapp: state.whatsapp } : {}),
     customerName: state.customerName || 'Cliente',
-    type: state.orderType,
+    type: finalOrderType, // Use forced type here
     ...(state.tableNumber ? { tableNumber: state.tableNumber } : {}),
     ...(state.waiterName ? { waiterName: state.waiterName } : {}),
     ...(state.address ? { address: state.address } : {}),

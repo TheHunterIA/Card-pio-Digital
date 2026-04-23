@@ -21,12 +21,20 @@ import {
   Sparkles,
   ChevronLeft,
   Users,
+  MessageCircle,
+  ImageIcon,
+  Send,
+  Loader2,
+  Share2,
   CreditCard as CreditCardIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MapaUrbanPrime from '../../components/shared/MapaUrbanPrime';
 import { QRCodeSVG } from 'qrcode.react';
 import PrintTicket from '../../components/PrintTicket';
+import { toBlob } from 'html-to-image';
+import { useRef } from 'react';
+import { syncManualClient } from '../../lib/database';
 
 export default function OrderStatus() {
   const navigate = useNavigate();
@@ -44,6 +52,8 @@ export default function OrderStatus() {
   const [showPrint, setShowPrint] = useState(false);
   const [hasRated, setHasRated] = useState(false);
   const [billRequested, setBillRequested] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const ticketRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -186,6 +196,70 @@ export default function OrderStatus() {
     }
   };
 
+  const handleShareToWhatsapp = async () => {
+    if (!order || isSharing) return;
+    setIsSharing(true);
+
+    try {
+      if (!ticketRef.current) {
+        throw new Error("Elemento de ticket não encontrado");
+      }
+
+      const blob = await toBlob(ticketRef.current, {
+        cacheBust: true,
+        backgroundColor: '#FCF9F2',
+        style: { padding: '40px', borderRadius: '0px' }
+      });
+
+      if (!blob) throw new Error("Falha ao gerar imagem");
+
+      const cleanNumber = (order.whatsapp || '').replace(/\D/g, '');
+      const text = `*Minha Comanda Digital - Urban Prime*\nOlá! Segue meu passe digital com o QR Code de saída para apresentar na recepção.`;
+      
+      // If we have a number, open WhatsApp directly. 
+      // If not, ask or use Web Share if available
+      if (cleanNumber) {
+        const whatsappUrl = `https://wa.me/55${cleanNumber}?text=${encodeURIComponent(text)}`;
+        
+        // Try to copy to clipboard (only works in secure contexts and with user gesture)
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            const data = [new ClipboardItem({ [blob.type]: blob })];
+            await navigator.clipboard.write(data);
+          }
+        } catch (e) {
+          console.warn("Clipboard copy failed", e);
+        }
+
+        window.open(whatsappUrl, '_blank');
+        alert("Enviando para seu WhatsApp! Se a imagem não aparecer, você pode COLAR (Ctrl+V) na conversa.");
+      } else {
+        // No number, try Web Share API
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'comanda.png', { type: 'image/png' })] })) {
+          const file = new File([blob], 'comanda.png', { type: 'image/png' });
+          await navigator.share({
+            title: 'Minha Comanda Digital - Urban Prime',
+            text: text,
+            files: [file]
+          });
+        } else {
+          // Final fallback: download
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `minha-comanda-urban-prime.png`;
+          link.click();
+          alert("Imagem da comanda baixada! Você pode enviá-la para seu próprio WhatsApp.");
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao compartilhar:", err);
+      alert("Não foi possível gerar a imagem para compartilhamento.");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   const handlePrint = () => {
     setShowPrint(true);
     setTimeout(() => {
@@ -208,14 +282,35 @@ export default function OrderStatus() {
 
   const getStatusInfo = () => {
     switch(order.status) {
-      case 'na-fila': return { icon: Clock, text: 'Na Fila de Preparo', color: 'text-brand-dark', bg: 'bg-brand/10', progress: 20, stroke: '#FF4E00' };
-      case 'preparando': return { icon: ChefHat, text: 'Em Preparo', color: 'text-ink', bg: 'bg-black/5', progress: 40, stroke: '#1C1917' };
-      case 'servido': return { icon: UtensilsCrossed, text: 'Servido', color: 'text-emerald-700', bg: 'bg-emerald-50', progress: 100, stroke: '#10B981' };
-      case 'pronto-entrega': return { icon: CheckCircle2, text: 'Pronto para Sair', color: 'text-ink', bg: 'bg-black/5', progress: 60, stroke: '#1C1917' };
-      case 'em-rota': return { icon: Motorbike, text: 'A Caminho', color: 'text-brand', bg: 'bg-brand/10', progress: 80, stroke: '#FF4E00' };
-      case 'finalizado': return { icon: PartyPopper, text: 'Pedido Entregue!', color: 'text-emerald-700', bg: 'bg-emerald-50', progress: 100, stroke: '#10B981' };
-      case 'saiu-entrega': return { icon: CheckCircle2, text: order.type === 'delivery' ? 'A Caminho' : 'Pronto para Coleta', color: 'text-emerald-700', bg: 'bg-emerald-50', progress: 80, stroke: '#10B981' };
-      default: return { icon: Clock, text: 'Aguardando', color: 'text-ink-muted', bg: 'bg-white', progress: 0, stroke: '#E5E7EB' };
+      case 'na-fila': return { icon: Clock, text: 'Na Fila de Preparo', label: 'Cozinha', color: 'text-brand-dark', bg: 'bg-brand/10', progress: 20, stroke: '#FF4E00' };
+      case 'preparando': return { icon: ChefHat, text: 'Em Preparo', label: 'Em Produção', color: 'text-ink', bg: 'bg-black/5', progress: 40, stroke: '#1C1917' };
+      case 'servido': return { 
+        icon: UtensilsCrossed, 
+        text: 'Bom apetite!', 
+        label: 'Servido', 
+        color: 'text-emerald-700', bg: 'bg-emerald-50', progress: 100, stroke: '#10B981' 
+      };
+      case 'pronto-entrega': return { 
+        icon: CheckCircle2, 
+        text: order.type === 'delivery' ? 'Aguardando Entregador' : 'Pronto para Retirada', 
+        label: order.type === 'delivery' ? 'Pronto' : 'No Balcão',
+        color: 'text-ink', bg: 'bg-black/5', progress: 60, stroke: '#1C1917' 
+      };
+      case 'em-rota': return { icon: Motorbike, text: 'A Caminho', label: 'Entrega', color: 'text-brand', bg: 'bg-brand/10', progress: 80, stroke: '#FF4E00' };
+      case 'finalizado': return { 
+        icon: PartyPopper, 
+        text: order.type === 'dine-in' ? 'Obrigado e volte sempre!' : 'Pedido Entregue!', 
+        label: 'Finalizado', 
+        color: 'text-emerald-700', bg: 'bg-emerald-50', progress: 100, stroke: '#10B981' 
+      };
+      case 'saiu-entrega': return { 
+        icon: CheckCircle2, 
+        text: order.type === 'delivery' ? 'A Caminho' : 
+              order.type === 'dine-in' ? 'Garçom trazendo seu pedido!' : 'Pronto para Coleta', 
+        label: order.type === 'dine-in' ? 'Saindo' : 'Em Trânsito',
+        color: 'text-emerald-700', bg: 'bg-emerald-50', progress: 80, stroke: '#10B981' 
+      };
+      default: return { icon: Clock, text: 'Aguardando', label: 'Status', color: 'text-ink-muted', bg: 'bg-white', progress: 0, stroke: '#E5E7EB' };
     }
   };
 
@@ -254,6 +349,26 @@ export default function OrderStatus() {
 
       <div className="max-w-xl mx-auto px-6 pt-8 space-y-6">
         
+        {/* ADD MORE ITEMS CALL TO ACTION */}
+        {order.type === 'dine-in' && !isPaid && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={() => navigate('/cardapio')}
+            className="w-full bg-brand text-white p-6 rounded-[28px] overflow-hidden flex items-center justify-between shadow-[0_20px_40px_-10px_rgba(255,78,0,0.3)] group active:scale-[0.98] transition-all relative"
+          >
+            <div className="text-left relative z-10">
+              <span className="text-[10px] uppercase font-black tracking-widest text-white/60 mb-1 block">Ainda com fome?</span>
+              <h3 className="font-display font-black text-xl uppercase tracking-tighter">ADICIONAR ITENS</h3>
+            </div>
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center group-hover:rotate-12 transition-transform relative z-10">
+              <UtensilsCrossed className="w-6 h-6" />
+            </div>
+            {/* Gloss effect */}
+            <div className="absolute top-0 right-0 w-32 h-full bg-white/5 skew-x-[-20deg] transform translate-x-16 group-hover:translate-x-8 transition-transform" />
+          </motion.button>
+        )}
+
         {/* Pass Card for Dine-in */}
         <AnimatePresence>
           {order.type === 'dine-in' && isPaid && (
@@ -263,13 +378,33 @@ export default function OrderStatus() {
               className="bg-emerald-600 rounded-[40px] p-8 text-white shadow-2xl text-center relative overflow-hidden"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-              <div className="relative z-10">
-                <div className="mb-6 bg-white p-4 rounded-3xl inline-block shadow-lg">
-                  <QRCodeSVG value={exitPassToken} size={150} />
+              <div className="relative z-10 flex flex-col items-center">
+                <div className="mb-6 bg-white p-6 rounded-[2.5rem] inline-block shadow-2xl scale-110 transition-transform hover:scale-115">
+                  <QRCodeSVG value={exitPassToken} size={180} level="H" />
                 </div>
-                <h3 className="text-2xl font-display font-bold mb-2 tracking-tight italic">LIBERADO!</h3>
-                <p className="text-emerald-100 font-medium px-4 leading-snug text-sm">
-                  Apresente este código na portaria para confirmar seu acerto.
+                
+                <div className="space-y-2 mb-8">
+                  <h3 className="text-3xl font-display font-black tracking-tight italic uppercase leading-none">COMANDA DIGITAL</h3>
+                  <div className="flex items-center justify-center gap-2 bg-white/10 px-4 py-1.5 rounded-full border border-white/20">
+                     <ShieldCheck className="w-4 h-4" />
+                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Passe de Saída</span>
+                  </div>
+                </div>
+
+                <p className="text-emerald-50 font-medium px-4 leading-relaxed text-sm mb-8 opacity-90">
+                  Esta é sua via digital. Apresente este QR Code na portaria/saída para liberar sua passagem.
+                </p>
+
+                <button 
+                  onClick={handleShareToWhatsapp}
+                  disabled={isSharing}
+                  className="w-full bg-white text-emerald-700 h-16 rounded-2xl font-display font-black uppercase tracking-widest text-xs shadow-xl shadow-black/10 flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageCircle className="w-5 h-5 fill-emerald-700 text-white" />}
+                  {isSharing ? 'GERANDO TICKET...' : 'SALVAR NO MEU WHATSAPP'}
+                </button>
+                <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest mt-4">
+                  DICA: TIRE UM PRINT DESTA TELA
                 </p>
               </div>
             </motion.div>
@@ -297,7 +432,7 @@ export default function OrderStatus() {
               </div>
             </div>
             <h2 className={`text-2xl font-display font-extrabold mb-1 ${statusInfo.color}`}>{statusInfo.text}</h2>
-            <p className="text-ink-muted text-xs font-bold uppercase tracking-widest bg-oat px-4 py-1.5 rounded-full">{order.status.replace('-', ' ')}</p>
+            <p className="text-ink-muted text-xs font-bold uppercase tracking-widest bg-oat px-4 py-1.5 rounded-full">{statusInfo.label}</p>
           </div>
 
           <div className="mt-10 pt-8 border-t border-black/5 space-y-4">
@@ -517,6 +652,70 @@ export default function OrderStatus() {
           <UtensilsCrossed className="w-4 h-4" /> Voltar aos Meus Pedidos
         </button>
       </div>
+
+      {/* Hidden Ticket for Image Generation */}
+      <div className="fixed -left-[2000px] top-0 pointer-events-none">
+          <div ref={ticketRef} className="w-[400px] bg-[#FCF9F2] p-10 font-sans">
+             <div className="text-center border-b-2 border-dashed border-ink pb-6 mb-6">
+                <h1 className="text-3xl font-display font-black text-ink uppercase tracking-tight">Urban Prime</h1>
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-ink-muted mt-1">Industrial Food & Co.</p>
+             </div>
+
+             <div className="mb-8">
+                <div className="flex justify-between items-baseline mb-2">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Mesa</span>
+                   <span className="text-3xl font-display font-black text-brand">{order.tableNumber}</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Tipo</span>
+                   <span className="text-[10px] font-bold text-ink uppercase tracking-tight">COMANDA DIGITAL</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Cliente</span>
+                   <span className="text-sm font-bold text-ink uppercase tracking-tight">{order.customerName || 'Consumidor'}</span>
+                </div>
+                <div className="flex justify-between items-baseline mt-1">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Data</span>
+                   <span className="text-[10px] font-mono font-bold text-ink-muted">{new Date().toLocaleDateString('pt-BR')}</span>
+                </div>
+             </div>
+
+             <div className="border-y-2 border-dashed border-ink/10 py-6 mb-6 space-y-4">
+                {order.items.map((it, i) => (
+                  <div key={i} className="flex justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-ink leading-tight">
+                          <span className="text-brand mr-1">{it.quantity}x</span> {it.item.name}
+                        </p>
+                        {it.selectedExtras && it.selectedExtras.length > 0 && (
+                          <p className="text-[8px] text-brand/70 font-medium">
+                            + {it.selectedExtras.map((e: any) => e.name).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs font-mono font-black text-ink">R$ {(it.item.price * it.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+             </div>
+
+             <div className="flex justify-between items-center mb-10">
+                <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Total Pago</span>
+                <span className="text-4xl font-display font-black text-ink tracking-tighter">R$ {order.total.toFixed(2)}</span>
+             </div>
+
+             <div className="bg-white p-8 rounded-[40px] flex flex-col items-center border-4 border-emerald-500 shadow-xl">
+                <div className="bg-brand/5 p-4 rounded-2xl mb-4">
+                   <QRCodeSVG value={exitPassToken} size={150} level="H" />
+                </div>
+                <p className="text-xl font-display font-black uppercase tracking-tight text-ink text-center">PASSE DE SAÍDA</p>
+                <p className="text-[9px] font-bold text-ink-muted text-center mt-1 uppercase tracking-widest leading-none">Apresente na recepção para liberar sua saída</p>
+             </div>
+
+             <div className="mt-10 text-center text-[9px] font-bold text-ink-muted uppercase tracking-[0.2em] opacity-30">
+                Obrigado pela preferência! Urban Prime.
+             </div>
+          </div>
+       </div>
 
       {/* Confirmation Modal */}
       {showConfirmation && (

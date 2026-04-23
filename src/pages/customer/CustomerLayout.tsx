@@ -9,9 +9,16 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function CustomerLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { cart, currentOrderId } = useStore();
+  const { cart, currentOrderId, tableNumber, orderType, setOrderType } = useStore();
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
   
+  // GLOBAL ENFORCEMENT: If tableNumber exists, orderType MUST be dine-in
+  useEffect(() => {
+    if (tableNumber && orderType !== 'dine-in') {
+      setOrderType('dine-in');
+    }
+  }, [tableNumber, orderType, setOrderType]);
+
   const isHome = location.pathname === '/';
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 

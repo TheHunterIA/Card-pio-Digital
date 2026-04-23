@@ -83,6 +83,13 @@ export default function Checkout() {
   const [isOutOfRange, setIsOutOfRange] = useState(false);
   const [currentDeliveryFee, setCurrentDeliveryFee] = useState(0);
 
+  // Sync orderType if table exists
+  useEffect(() => {
+    if (tableNumber && orderType !== 'dine-in') {
+      setOrderType('dine-in');
+    }
+  }, [tableNumber, orderType, setOrderType]);
+
   useEffect(() => {
     const unsub = subscribeToDeliveryConfig();
     return () => unsub();
