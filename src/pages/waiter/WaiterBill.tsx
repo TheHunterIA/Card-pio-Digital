@@ -2,12 +2,14 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { finalizeOrder, markManualPayment } from '../../lib/database';
-import { ChevronLeft, Receipt, QrCode, CheckCircle2, Utensils, Printer, ShieldCheck, AlertCircle, MessageCircle, Send, X as CloseIcon } from 'lucide-react';
+import { ChevronLeft, Receipt, QrCode, CheckCircle2, Utensils, Printer, ShieldCheck, AlertCircle, MessageCircle, Send, X as CloseIcon, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import PrintTicket from '../../components/PrintTicket';
 import { motion, AnimatePresence } from 'motion/react';
+import { toBlob, toPng } from 'html-to-image';
+import { useRef } from 'react';
 
 export default function WaiterBill() {
   const { tableId } = useParams();
@@ -22,7 +24,9 @@ export default function WaiterBill() {
   const [showWhatsappModal, setShowWhatsappModal] = useState(false);
   const [whatsappName, setWhatsappName] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
+  const ticketRef = useRef<HTMLDivElement>(null);
   const [printingOrder, setPrintingOrder] = useState<any>(null); // holds the specific order to print
 
   useEffect(() => {
@@ -86,34 +90,59 @@ export default function WaiterBill() {
     setShowWhatsappModal(true);
   };
 
-  const confirmWhatsappSend = () => {
-    if (!whatsappNumber || whatsappNumber.length < 10) {
-      alert("Por favor, insira um número de WhatsApp válido.");
-      return;
-    }
-
-    const cleanNumber = whatsappNumber.replace(/\D/g, '');
-    let message = `*Comanda Mesa ${tableId} - Urban Prime*\n`;
-    message += `--------------------------\n`;
-    message += `*Cliente:* ${whatsappName || 'Não informado'}\n`;
-    message += `*Mesa:* ${tableId}\n`;
-    message += `--------------------------\n`;
-    message += `*Itens:*\n`;
+  const confirmWhatsappSend = async () => {
+    if (isGeneratingImage) return;
     
-    tableOrders.forEach(order => {
-      order.items.forEach(it => {
-        message += `• ${it.quantity}x ${it.item.name} - R$ ${((it.item.price || 0) * it.quantity).toFixed(2)}\n`;
-        if (it.notes) message += `   _(Obs: ${it.notes})_\n`;
+    setIsGeneratingImage(true);
+    try {
+      if (!ticketRef.current) {
+        alert("Erro ao gerar imagem da comanda.");
+        return;
+      }
+
+      // Hide temporary UI elements if any, though ticketRef should be clean
+      const blob = await toBlob(ticketRef.current, {
+        cacheBust: true,
+        backgroundColor: '#FCF9F2', // matching --color-oat
+        style: {
+          padding: '40px',
+          borderRadius: '0px'
+        }
       });
-    });
 
-    message += `--------------------------\n`;
-    message += `*Total: R$ ${total.toFixed(2)}*\n\n`;
-    message += `Obrigado pela preferência! 🥤🍔`;
+      if (!blob) throw new Error("Falha ao gerar blob");
 
-    const url = `https://wa.me/55${cleanNumber}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-    setShowWhatsappModal(false);
+      const file = new File([blob], `comanda-mesa-${tableId}.png`, { type: 'image/png' });
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Comanda Mesa ${tableId} - Urban Prime`,
+          text: `Olá ${whatsappName || ''}! Segue sua comanda da Mesa ${tableId}.`
+        });
+      } else {
+        // Fallback for browsers that don't support file sharing
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `comanda-mesa-${tableId}.png`;
+        link.click();
+        
+        // Also open WhatsApp message for convenience
+        const text = `*Comanda Mesa ${tableId} - Urban Prime*\nOlá ${whatsappName}! A imagem da sua comanda foi baixada. Por favor, anexe-a aqui na conversa.`;
+        const whatsappUrl = `https://wa.me/55${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+        window.open(whatsappUrl, '_blank');
+        
+        alert("Seu navegador não permite o envio direto de arquivos. A imagem foi baixada para você enviar manualmente.");
+      }
+      
+      setShowWhatsappModal(false);
+    } catch (err) {
+      console.error("Error generating image:", err);
+      alert("Houve um erro ao gerar a imagem da comanda.");
+    } finally {
+      setIsGeneratingImage(false);
+    }
   };
 
   const handleLaunchOrder = () => {
@@ -415,15 +444,76 @@ export default function WaiterBill() {
 
                 <button 
                   onClick={confirmWhatsappSend}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-display font-black uppercase tracking-[0.25em] py-5 rounded-2xl shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
+                  disabled={isGeneratingImage || !whatsappNumber}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-200 text-white font-display font-black uppercase tracking-[0.25em] py-5 rounded-2xl shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
                 >
-                  <Send className="w-5 h-5" />
-                  Abrir WhatsApp
+                  {isGeneratingImage ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <ImageIcon className="w-5 h-5" />
+                  )}
+                  {isGeneratingImage ? 'Gerando Imagem...' : 'Enviar Imagem'}
                 </button>
              </motion.div>
            </div>
          )}
        </AnimatePresence>
+
+       {/* Hidden Ticket for Image Generation */}
+       <div className="fixed -left-[2000px] top-0 pointer-events-none">
+          <div ref={ticketRef} className="w-[400px] bg-[#FCF9F2] p-10 font-sans">
+             <div className="text-center border-b-2 border-dashed border-ink pb-6 mb-6">
+                <h1 className="text-3xl font-display font-black text-ink uppercase tracking-tight">Urban Prime</h1>
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-ink-muted mt-1">Industrial Food & Co.</p>
+             </div>
+
+             <div className="mb-8">
+                <div className="flex justify-between items-baseline mb-2">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Mesa</span>
+                   <span className="text-3xl font-display font-black text-brand">{tableId}</span>
+                </div>
+                <div className="flex justify-between items-baseline">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Cliente</span>
+                   <span className="text-sm font-bold text-ink uppercase tracking-tight">{whatsappName || 'Consumidor'}</span>
+                </div>
+                <div className="flex justify-between items-baseline mt-1">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Data</span>
+                   <span className="text-[10px] font-mono font-bold text-ink-muted">{new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+             </div>
+
+             <div className="border-y-2 border-dashed border-ink/10 py-6 mb-6 space-y-4">
+                {tableOrders.flatMap(o => o.items).map((it, i) => (
+                  <div key={i} className="flex justify-between items-start gap-4">
+                     <div className="flex-1">
+                        <p className="text-xs font-bold text-ink leading-tight">
+                          <span className="text-brand mr-1">{it.quantity}x</span> {it.item.name}
+                        </p>
+                        {it.notes && <p className="text-[9px] text-ink-muted italic">Obs: {it.notes}</p>}
+                     </div>
+                     <span className="text-xs font-mono font-black text-ink">R$ {((it.item.price || 0) * it.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+             </div>
+
+             <div className="flex justify-between items-center mb-10">
+                <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Total Final</span>
+                <span className="text-4xl font-display font-black text-ink tracking-tighter">R$ {total.toFixed(2)}</span>
+             </div>
+
+             <div className="bg-white p-6 rounded-3xl flex flex-col items-center border border-black/5">
+                <div className="bg-brand/5 p-4 rounded-2xl mb-3">
+                   <QRCodeSVG value={exitPassToken} size={150} />
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-ink text-center">QR Code de Saída</p>
+                <p className="text-[8px] font-medium text-ink-muted text-center mt-1 uppercase">Apresente na recepção para liberar sua saída</p>
+             </div>
+
+             <div className="mt-10 text-center text-[9px] font-bold text-ink-muted uppercase tracking-[0.2em] opacity-30">
+                Obrigado pela preferência!
+             </div>
+          </div>
+       </div>
     </div>
   );
 }
