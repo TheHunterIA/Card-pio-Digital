@@ -25,6 +25,7 @@ export default function WaiterBill() {
   const [whatsappName, setWhatsappName] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isSharingVisitor, setIsSharingVisitor] = useState(false);
 
   const ticketRef = useRef<HTMLDivElement>(null);
   const [printingOrder, setPrintingOrder] = useState<any>(null); // holds the specific order to print
@@ -43,8 +44,16 @@ export default function WaiterBill() {
     return tableOrders.reduce((sum, order) => sum + order.total, 0);
   }, [tableOrders]);
 
+  const today = new Date().toISOString().split('T')[0];
   const combinedOrderId = useMemo(() => tableOrders.length > 0 ? tableOrders[0].id : '', [tableOrders]);
-  const exitPassToken = combinedOrderId ? `UP_PASS_${combinedOrderId}_${new Date().toISOString().split('T')[0]}` : '';
+  
+  const exitPassToken = useMemo(() => {
+    if (isSharingVisitor || tableOrders.length === 0) {
+      const salt = Math.random().toString(36).substring(7).toUpperCase();
+      return `UP_PASS_VISITOR_${tableId}_${today}_${salt}`;
+    }
+    return `UP_PASS_${combinedOrderId}_${today}`;
+  }, [combinedOrderId, today, tableId, isSharingVisitor, tableOrders.length]);
 
   const handlePrintOrder = () => {
     if (tableOrders.length === 0) return;
@@ -81,10 +90,10 @@ export default function WaiterBill() {
     }, 500);
   };
 
-  const handleWhatsappShare = () => {
-    if (tableOrders.length === 0) return;
+  const handleWhatsappShare = (asVisitor: boolean = false) => {
+    setIsSharingVisitor(asVisitor);
     // Pre-fill name if order has it
-    if (tableOrders[0].customerName && !whatsappName) {
+    if (tableOrders.length > 0 && tableOrders[0].customerName && !whatsappName) {
       setWhatsappName(tableOrders[0].customerName);
     }
     setShowWhatsappModal(true);
@@ -113,7 +122,8 @@ export default function WaiterBill() {
       if (!blob) throw new Error("Falha ao gerar blob");
 
       const cleanNumber = whatsappNumber.replace(/\D/g, '');
-      const text = `*Comanda Mesa ${tableId} - Urban Prime*\nOlá ${whatsappName || ''}! Segue sua comanda digital com o QR Code de saída.`;
+      const subject = isSharingVisitor ? 'Passe de Visitante' : 'Comanda Digital';
+      const text = `*${subject} Mesa ${tableId} - Urban Prime*\nOlá ${whatsappName || ''}! Segue seu passe digital com o QR Code de saída.`;
       const whatsappUrl = `https://wa.me/55${cleanNumber}?text=${encodeURIComponent(text)}`;
       
       // 1. Try to copy to clipboard for easy pasting
@@ -228,24 +238,43 @@ export default function WaiterBill() {
                   Liberação imediata para clientes que não consumiram.
                 </p>
 
-                <div className="flex flex-col gap-4">
+                <div className="bg-white p-8 rounded-[40px] border-2 border-brand/20 shadow-2xl flex flex-col items-center relative overflow-hidden mb-8">
+                  <div className="absolute top-0 left-0 w-full h-2 bg-brand" />
+                  <div className="bg-brand/5 p-4 rounded-[2rem] mb-6">
+                    <QRCodeSVG value={exitPassToken} size={180} className="rounded-xl" />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-ink text-center mb-1">QR Code de Visita</p>
+                  <p className="text-[8px] font-medium text-ink-muted text-center uppercase">Mesa {tableId} • {new Date().toLocaleDateString('pt-BR')}</p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 w-full px-4">
                   <motion.button 
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handlePrintVisitor}
-                    className="w-full h-24 bg-ink text-white rounded-[2rem] font-display font-black uppercase tracking-[0.25em] text-sm shadow-2xl flex items-center justify-between px-8 group relative overflow-hidden active:bg-brand transition-colors"
+                    className="flex-1 h-24 bg-ink text-white rounded-[2rem] font-display font-black uppercase tracking-[0.25em] text-sm shadow-2xl flex items-center justify-between px-8 group relative overflow-hidden active:bg-brand transition-colors"
                   >
                     <div className="flex flex-col items-start text-left">
-                      <span className="text-[10px] opacity-40 mb-1">Comando Industrial</span>
-                      <span className="text-white group-active:text-white">IMPRIMIR PASSE</span>
+                      <span className="text-[10px] opacity-40 mb-1">Imprimir</span>
+                      <span>PASSE</span>
                     </div>
                     <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center group-hover:bg-brand transition-all duration-300">
                       <Printer className="w-7 h-7 text-white" />
                     </div>
-                    
-                    {/* Decorative Industrial Pattern */}
-                    <div className="absolute top-0 right-0 w-32 h-full opacity-[0.03] pointer-events-none">
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[size:10px_10px]" />
+                  </motion.button>
+
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleWhatsappShare(true)}
+                    className="flex-1 h-24 bg-emerald-500 text-white rounded-[2rem] font-display font-black uppercase tracking-[0.25em] text-sm shadow-2xl flex items-center justify-between px-8 group relative overflow-hidden active:bg-emerald-600 transition-colors"
+                  >
+                    <div className="flex flex-col items-start text-left">
+                      <span className="text-[10px] opacity-40 mb-1">Enviar</span>
+                      <span>WHATSAPP</span>
+                    </div>
+                    <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center group-hover:bg-emerald-600 transition-all duration-300">
+                      <MessageCircle className="w-7 h-7 text-white" />
                     </div>
                   </motion.button>
                 </div>
@@ -272,7 +301,7 @@ export default function WaiterBill() {
                   <Printer className="w-5 h-5" /> Imprimir 
                 </button>
                 <button 
-                  onClick={handleWhatsappShare}
+                  onClick={() => handleWhatsappShare(false)}
                   className="flex-1 flex items-center justify-center gap-3 bg-emerald-500 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-600 transition-all shadow-xl active:scale-95"
                 >
                   <MessageCircle className="w-5 h-5" /> Enviar por WhatsApp
@@ -374,7 +403,7 @@ export default function WaiterBill() {
                      </div>
                    </button>
                    <button 
-                    onClick={handleWhatsappShare}
+                    onClick={() => handleWhatsappShare(false)}
                     className="bg-white border-2 border-black/5 h-20 rounded-2xl flex flex-col items-center justify-center gap-1 hover:border-emerald-400/40 group transition-all shadow-sm active:scale-95"
                    >
                      <MessageCircle className="w-5 h-5 text-ink-muted group-hover:text-emerald-500 transition-colors" />
@@ -425,8 +454,12 @@ export default function WaiterBill() {
                   <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-4">
                     <MessageCircle className="w-7 h-7" />
                   </div>
-                  <h3 className="text-2xl font-display font-black text-ink uppercase tracking-tight">Enviar Comanda</h3>
-                  <p className="text-ink-muted text-xs font-bold uppercase tracking-widest mt-1">Total: R$ {total.toFixed(2)}</p>
+                  <h3 className="text-2xl font-display font-black text-ink uppercase tracking-tight">
+                    {isSharingVisitor ? 'Passe Visitante' : 'Enviar Comanda'}
+                  </h3>
+                  <p className="text-ink-muted text-xs font-bold uppercase tracking-widest mt-1">
+                    {isSharingVisitor ? 'Acesso sem consumo' : `Total: R$ ${total.toFixed(2)}`}
+                  </p>
                 </div>
 
                 <div className="space-y-4 mb-8">
@@ -483,6 +516,10 @@ export default function WaiterBill() {
                    <span className="text-3xl font-display font-black text-brand">{tableId}</span>
                 </div>
                 <div className="flex justify-between items-baseline">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Tipo</span>
+                   <span className="text-[10px] font-bold text-ink uppercase tracking-tight">{isSharingVisitor ? 'PASSE DE VISITANTE' : 'COMANDA DE CONSUMO'}</span>
+                </div>
+                <div className="flex justify-between items-baseline">
                    <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Cliente</span>
                    <span className="text-sm font-bold text-ink uppercase tracking-tight">{whatsappName || 'Consumidor'}</span>
                 </div>
@@ -493,22 +530,29 @@ export default function WaiterBill() {
              </div>
 
              <div className="border-y-2 border-dashed border-ink/10 py-6 mb-6 space-y-4">
-                {tableOrders.flatMap(o => o.items).map((it, i) => (
-                  <div key={i} className="flex justify-between items-start gap-4">
-                     <div className="flex-1">
-                        <p className="text-xs font-bold text-ink leading-tight">
-                          <span className="text-brand mr-1">{it.quantity}x</span> {it.item.name}
-                        </p>
-                        {it.notes && <p className="text-[9px] text-ink-muted italic">Obs: {it.notes}</p>}
-                     </div>
-                     <span className="text-xs font-mono font-black text-ink">R$ {((it.item.price || 0) * it.quantity).toFixed(2)}</span>
+                {isSharingVisitor ? (
+                  <div className="py-4 text-center">
+                    <p className="text-xs font-black uppercase tracking-widest text-ink">Acesso Livre - Sem Consumo</p>
+                    <p className="text-[8px] text-ink-muted uppercase mt-1">Visitante liberado para saída</p>
                   </div>
-                ))}
+                ) : (
+                  tableOrders.flatMap(o => o.items).map((it, i) => (
+                    <div key={i} className="flex justify-between items-start gap-4">
+                       <div className="flex-1">
+                          <p className="text-xs font-bold text-ink leading-tight">
+                            <span className="text-brand mr-1">{it.quantity}x</span> {it.item.name}
+                          </p>
+                          {it.notes && <p className="text-[9px] text-ink-muted italic">Obs: {it.notes}</p>}
+                       </div>
+                       <span className="text-xs font-mono font-black text-ink">R$ {((it.item.price || 0) * it.quantity).toFixed(2)}</span>
+                    </div>
+                  ))
+                )}
              </div>
 
              <div className="flex justify-between items-center mb-10">
                 <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Total Final</span>
-                <span className="text-4xl font-display font-black text-ink tracking-tighter">R$ {total.toFixed(2)}</span>
+                <span className="text-4xl font-display font-black text-ink tracking-tighter">R$ {isSharingVisitor ? '0,00' : total.toFixed(2)}</span>
              </div>
 
              <div className="bg-white p-6 rounded-3xl flex flex-col items-center border border-black/5">
