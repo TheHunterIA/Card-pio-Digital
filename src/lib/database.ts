@@ -372,6 +372,21 @@ export async function finalizeOrder(orderId: string) {
   }
 }
 
+export async function registerVisitorPass(tableId: string, salt: string) {
+  try {
+    const sessionRef = doc(db, 'sessions', `table-${tableId}`);
+    await setDoc(sessionRef, {
+      tableNumber: tableId,
+      status: 'open',
+      activeVisitorSalt: salt,
+      visitorGeneratedAt: serverTimestamp(),
+      lastActivity: serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error("Failed to register visitor pass", error);
+  }
+}
+
 export async function markManualPayment(orderId: string) {
   try {
     await updateDoc(doc(db, 'orders', orderId), {

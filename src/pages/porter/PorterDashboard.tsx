@@ -30,12 +30,23 @@ export default function PorterDashboard() {
   const [isFinalizing, setIsFinalizing] = useState(false);
   
   const [config, setConfig] = useState<any>(null);
+  const [activeSessions, setActiveSessions] = useState<Record<string, any>>({});
   const orders = useStore(state => state.orders);
   const [scannerInstance, setScannerInstance] = useState<Html5Qrcode | null>(null);
 
   useEffect(() => {
     return onSnapshot(doc(db, 'settings', 'config'), (snap) => {
       if (snap.exists()) setConfig(snap.data());
+    });
+  }, []);
+
+  useEffect(() => {
+    return onSnapshot(collection(db, 'sessions'), (snap) => {
+      const sessions: Record<string, any> = {};
+      snap.docs.forEach(d => {
+        sessions[d.id] = d.data();
+      });
+      setActiveSessions(sessions);
     });
   }, []);
 
@@ -102,17 +113,31 @@ export default function PorterDashboard() {
     setScanning(false);
     
     const tableOrders = activeOrdersByTable[tableId] || [];
+    const session = activeSessions[`table-${tableId}`];
     
     if (tableOrders.length === 0) {
-      // Release as visitor
-      setScanResult({
-        id: `VISITOR-${tableId}`,
-        customerName: 'Visitante (Consumo Zero)',
-        tableNumber: tableId,
-        total: 0,
-        isValid: true,
-        isVisitor: true
-      });
+      if (session?.activeVisitorSalt) {
+        setScanResult({
+          id: `VISITOR-${tableId}-${session.activeVisitorSalt}`,
+          customerName: 'Visitante (Passe Aguardando)',
+          tableNumber: tableId,
+          total: 0,
+          isValid: true,
+          isVisitor: true,
+          visitorSalt: session.activeVisitorSalt,
+          warning: 'Este pass foi gerado pelo Garçom. Clique em Liberar para validar.'
+        });
+      } else {
+        setScanResult({
+          id: `VISITOR-${tableId}`,
+          customerName: 'Acesso Visitante',
+          tableNumber: tableId,
+          total: 0,
+          isValid: true,
+          isVisitor: true,
+          warning: 'Nenhuma comanda ou passe ativo. Liberar comanda em branco?'
+        });
+      }
       return;
     }
 
@@ -370,7 +395,20 @@ export default function PorterDashboard() {
     setIsFinalizing(true);
     
     try {
-      if (scanResult.id.startsWith('TABLE-')) {
+      if (scanResult.id.startsWith('VISITOR-') && scanResult.visitorSalt) {
+        // Mark the token as used so it can't be scanned again if it was a printed pass
+        const today = new Date().toISOString().split('T')[0];
+        const tokenStr = `UP_PASS_VISITOR_${scanResult.tableNumber}_${today}_${scanResult.visitorSalt}`;
+        await setDoc(doc(db, 'usedTokens', tokenStr), { 
+          usedAt: serverTimestamp(), 
+          tableId: scanResult.tableNumber,
+          source: 'manual_release'
+        });
+
+        // Clear visitor salt from session
+        const sessionRef = doc(db, 'sessions', `table-${scanResult.tableNumber}`);
+        await setDoc(sessionRef, { activeVisitorSalt: null, status: 'closed', closedAt: serverTimestamp() }, { merge: true });
+      } else if (scanResult.id.startsWith('TABLE-')) {
         const tableId = scanResult.tableNumber;
         const q = query(
           collection(db, 'orders'),
@@ -683,7 +721,9 @@ export default function PorterDashboard() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4 md:gap-6">
                   {tables.map(table => {
                     const tableOrders = activeOrdersByTable[table.id] || [];
+                    const session = activeSessions[`table-${table.id}`];
                     const isOccupied = tableOrders.length > 0;
+                    const isVisitorActive = session?.activeVisitorSalt && !isOccupied;
                     const hasPending = tableOrders.some(o => o.paymentStatus !== 'paid');
                     const hasReady = tableOrders.some(o => o.status === 'pronto-entrega' || o.status === 'saiu-entrega');
 
@@ -696,16 +736,18 @@ export default function PorterDashboard() {
                             ? 'bg-brand border-brand text-white shadow-lg animate-pulse'
                             : hasPending 
                               ? 'bg-amber-500 border-amber-500 text-black shadow-sm'
-                              : isOccupied 
-                                ? 'bg-ink border-ink text-white shadow-md'
-                                : 'bg-oat/40 border-black/5 text-ink-muted hover:border-brand/30 hover:bg-white'
+                              : isVisitorActive
+                                ? 'bg-emerald-500 border-emerald-500 text-white shadow-md'
+                                : isOccupied 
+                                  ? 'bg-ink border-ink text-white shadow-md'
+                                  : 'bg-oat/40 border-black/5 text-ink-muted hover:border-brand/30 hover:bg-white'
                         }`}
                       >
                         <span className="text-xl md:text-2xl font-display font-black italic">{table.id}</span>
                         <div className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-current opacity-30 mt-1" />
                         
                         <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-brand text-white text-[7px] font-black px-1.5 rounded-full pointer-events-none z-50">
-                           {isOccupied ? (hasPending ? 'PAG' : 'OK') : 'L'}
+                           {isOccupied ? (hasPending ? 'PAG' : 'OK') : (isVisitorActive ? 'VISIT' : 'L')}
                         </div>
                       </button>
                     );

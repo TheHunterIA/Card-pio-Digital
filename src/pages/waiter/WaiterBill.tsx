@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
-import { finalizeOrder, markManualPayment, syncManualClient, updateOrderStatus } from '../../lib/database';
+import { finalizeOrder, markManualPayment, syncManualClient, updateOrderStatus, registerVisitorPass } from '../../lib/database';
 import { ChevronLeft, Receipt, QrCode, CheckCircle2, Utensils, Printer, ShieldCheck, AlertCircle, MessageCircle, Send, X as CloseIcon, Image as ImageIcon, Loader2, BellRing } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -26,6 +26,7 @@ export default function WaiterBill() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isSharingVisitor, setIsSharingVisitor] = useState(false);
+  const [activeVisitorSalt, setActiveVisitorSalt] = useState<string | null>(null);
 
   const ticketRef = useRef<HTMLDivElement>(null);
   const [printingOrder, setPrintingOrder] = useState<any>(null); // holds the specific order to print
@@ -49,11 +50,11 @@ export default function WaiterBill() {
   
   const exitPassToken = useMemo(() => {
     if (isSharingVisitor || tableOrders.length === 0) {
-      const salt = Math.random().toString(36).substring(7).toUpperCase();
+      const salt = activeVisitorSalt || Math.random().toString(36).substring(7).toUpperCase();
       return `UP_PASS_VISITOR_${tableId}_${today}_${salt}`;
     }
     return `UP_PASS_${combinedOrderId}_${today}`;
-  }, [combinedOrderId, today, tableId, isSharingVisitor, tableOrders.length]);
+  }, [combinedOrderId, today, tableId, isSharingVisitor, tableOrders.length, activeVisitorSalt]);
 
   const handlePrintOrder = () => {
     if (tableOrders.length === 0) return;
@@ -83,6 +84,11 @@ export default function WaiterBill() {
     setShowPrint(false); // Ensure we're not showing regular print
     // Generate a unique salt for this specific print action
     const salt = Math.random().toString(36).substring(7).toUpperCase();
+    setActiveVisitorSalt(salt);
+    
+    // Register the visitor pass in the DB so the Porter can see it
+    registerVisitorPass(tableId, salt);
+    
     setPrintingVisitor({ id: tableId, salt });
     setTimeout(() => {
       window.print();
@@ -92,6 +98,11 @@ export default function WaiterBill() {
 
   const handleWhatsappShare = (asVisitor: boolean = false) => {
     setIsSharingVisitor(asVisitor);
+    if (asVisitor && tableId) {
+      const salt = Math.random().toString(36).substring(7).toUpperCase();
+      setActiveVisitorSalt(salt);
+      registerVisitorPass(tableId, salt);
+    }
     // Pre-fill name if order has it
     if (tableOrders.length > 0 && tableOrders[0].customerName && !whatsappName) {
       setWhatsappName(tableOrders[0].customerName);
