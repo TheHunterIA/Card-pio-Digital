@@ -330,9 +330,6 @@ export const useStore = create<AppState>()(
         waiterName: state.waiterName,
         orderType: state.orderType,
         currentOrderId: state.currentOrderId,
-        couponCode: state.couponCode,
-        couponDiscount: state.couponDiscount,
-        isFreeDeliveryCoupon: state.isFreeDeliveryCoupon,
         currentSessionId: state.currentSessionId,
       })
     }

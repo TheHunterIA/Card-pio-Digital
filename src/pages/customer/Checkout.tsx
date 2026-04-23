@@ -275,7 +275,7 @@ export default function Checkout() {
         console.error(err);
         setIsLocating(false);
         if (err.code === err.PERMISSION_DENIED) {
-          alert('Você negou o acesso à localização. Autorize no seu navegador/celular para calcularmos a entrega.');
+          alert('GPS bloqueado pelo seu navegador.\n\nPara consertar, você precisaria ir nas "Configurações de Site" do seu navegador e reliberar o acesso.\n\nDICA RÁPIDA: Você não é obrigado a usar o GPS. Basta digitar o nome da sua rua ou CEP no campo de busca abaixo para calcularmos a entrega rapidinho!');
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           alert('Sinal de GPS indisponível no momento. Tente chegar mais perto de uma janela.');
         } else {
@@ -299,6 +299,7 @@ export default function Checkout() {
     setIsProcessing(true);
     const feeToCharge = orderType === 'delivery' ? currentDeliveryFee : 0;
     await placeOrder(paymentMethod, feeToCharge);
+    useStore.getState().clearCart();
     navigate('/status', { replace: true });
   };
 

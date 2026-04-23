@@ -105,7 +105,7 @@ export default function Menu() {
           const distance = R * c;
 
           if (distance > config.radiusMeters) {
-            setGeoError(`Você parece estar fora do estabelecimento (${Math.round(distance)}m). Pedidos no local só são permitidos presencialmente.`);
+            setGeoError(`Nosso mapa diz que você está a ${Math.round(distance)}m do restaurante. Os pedidos na mesa só funcionam presencialmente!`);
           } else {
             setGeoError(null);
           }
@@ -358,7 +358,7 @@ export default function Menu() {
           >
             <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-bold text-red-800 leading-tight">Geocerca Ativa</p>
+              <p className="text-sm font-bold text-red-800 leading-tight">Ops, longe do restaurante?</p>
               <p className="text-xs text-red-700 mt-1 font-medium">{geoError}</p>
             </div>
           </motion.div>
