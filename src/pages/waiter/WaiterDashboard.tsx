@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
-import { LayoutGrid, Utensils, MessageCircle, AlertCircle, ShieldCheck, Printer, X, CheckCircle2, BellRing, Sparkles } from 'lucide-react';
+import { LayoutGrid, Utensils, MessageCircle, AlertCircle, ShieldCheck, Printer, X, CheckCircle2, BellRing, Sparkles, Receipt } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';

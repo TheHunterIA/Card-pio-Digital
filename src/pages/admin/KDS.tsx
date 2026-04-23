@@ -68,10 +68,9 @@ export default function KDS() {
       if (order.type === 'delivery') updateOrderStatus(order.id, 'em-rota');
       else updateOrderStatus(order.id, 'servido');
     }
-    else if (order.status === 'em-rota') {
+    else if (order.status === 'em-rota' || order.status === 'servido') {
       updateOrderStatus(order.id, 'finalizado');
     }
-    else if (order.status === 'em-rota' || order.status === 'servido') updateOrderStatus(order.id, 'finalizado');
   };
 
   const handleCancelOrder = (order: Order) => {
