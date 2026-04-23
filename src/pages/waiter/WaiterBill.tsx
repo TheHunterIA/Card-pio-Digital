@@ -92,6 +92,10 @@ export default function WaiterBill() {
 
   const confirmWhatsappSend = async () => {
     if (isGeneratingImage) return;
+    if (!whatsappNumber || whatsappNumber.length < 10) {
+      alert("Por favor, insira um número de WhatsApp válido.");
+      return;
+    }
     
     setIsGeneratingImage(true);
     try {
@@ -100,40 +104,46 @@ export default function WaiterBill() {
         return;
       }
 
-      // Hide temporary UI elements if any, though ticketRef should be clean
       const blob = await toBlob(ticketRef.current, {
         cacheBust: true,
-        backgroundColor: '#FCF9F2', // matching --color-oat
-        style: {
-          padding: '40px',
-          borderRadius: '0px'
-        }
+        backgroundColor: '#FCF9F2',
+        style: { padding: '40px', borderRadius: '0px' }
       });
 
       if (!blob) throw new Error("Falha ao gerar blob");
 
-      const file = new File([blob], `comanda-mesa-${tableId}.png`, { type: 'image/png' });
+      const cleanNumber = whatsappNumber.replace(/\D/g, '');
+      const text = `*Comanda Mesa ${tableId} - Urban Prime*\nOlá ${whatsappName || ''}! Segue sua comanda digital com o QR Code de saída.`;
+      const whatsappUrl = `https://wa.me/55${cleanNumber}?text=${encodeURIComponent(text)}`;
+      
+      // 1. Try to copy to clipboard for easy pasting
+      let copiedToClipboard = false;
+      try {
+        if (navigator.clipboard && window.ClipboardItem) {
+          const data = [new ClipboardItem({ [blob.type]: blob })];
+          await navigator.clipboard.write(data);
+          copiedToClipboard = true;
+        }
+      } catch (e) {
+        console.warn("Clipboard copy failed", e);
+      }
 
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Comanda Mesa ${tableId} - Urban Prime`,
-          text: `Olá ${whatsappName || ''}! Segue sua comanda da Mesa ${tableId}.`
-        });
-      } else {
-        // Fallback for browsers that don't support file sharing
+      // 2. Fallback: Download the image
+      if (!copiedToClipboard) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
         link.download = `comanda-mesa-${tableId}.png`;
         link.click();
-        
-        // Also open WhatsApp message for convenience
-        const text = `*Comanda Mesa ${tableId} - Urban Prime*\nOlá ${whatsappName}! A imagem da sua comanda foi baixada. Por favor, anexe-a aqui na conversa.`;
-        const whatsappUrl = `https://wa.me/55${whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
-        window.open(whatsappUrl, '_blank');
-        
-        alert("Seu navegador não permite o envio direto de arquivos. A imagem foi baixada para você enviar manualmente.");
+      }
+
+      // 3. Open WhatsApp conversation
+      window.open(whatsappUrl, '_blank');
+      
+      if (copiedToClipboard) {
+        alert("Conversa aberta! A imagem foi COPIADA. Basta COLAR (Ctrl+V ou Segurar e Colar) na conversa do WhatsApp.");
+      } else {
+        alert("Conversa aberta! A imagem foi BAIXADA. Basta ANEXAR o arquivo na conversa do WhatsApp.");
       }
       
       setShowWhatsappModal(false);
