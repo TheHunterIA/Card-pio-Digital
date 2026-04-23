@@ -38,7 +38,7 @@ import { syncManualClient } from '../../lib/database';
 
 export default function OrderStatus() {
   const navigate = useNavigate();
-  const { currentOrderId, orders, setOrders, tableNumber } = useStore();
+  const { currentOrderId, orders, setOrders, tableNumber, deviceId } = useStore();
   const [isChecking, setIsChecking] = useState(true);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -98,6 +98,34 @@ export default function OrderStatus() {
   }, [currentOrderId]);
 
   const order = useMemo(() => orders.find(o => o.id === currentOrderId), [orders, currentOrderId]);
+
+  const userTotal = useMemo(() => {
+    if (!order) return 0;
+    const myDeviceId = order.deviceId || deviceId;
+    return tableOrders
+      .filter(o => o.deviceId === myDeviceId || (o.userId === order.userId && o.userId !== undefined))
+      .reduce((acc, curr) => acc + curr.total, 0);
+  }, [tableOrders, order, deviceId]);
+
+  const userItems = useMemo(() => {
+    if (!order) return [];
+    const myDeviceId = order.deviceId || deviceId;
+    const items: any[] = [];
+    tableOrders
+      .filter(o => o.deviceId === myDeviceId || (o.userId === order.userId && o.userId !== undefined))
+      .forEach(o => {
+        items.push(...o.items);
+      });
+    return items;
+  }, [tableOrders, order, deviceId]);
+
+  const userPendingTotal = useMemo(() => {
+    if (!order) return 0;
+    const myDeviceId = order.deviceId || deviceId;
+    return tableOrders
+      .filter(o => (o.deviceId === myDeviceId || (o.userId === order.userId && o.userId !== undefined)) && o.paymentStatus !== 'paid')
+      .reduce((acc, curr) => acc + curr.total, 0);
+  }, [tableOrders, order, deviceId]);
 
   // If at table, fetch all active orders for this table to show the "Table Session"
   useEffect(() => {
@@ -515,7 +543,7 @@ export default function OrderStatus() {
              </div>
              <div className="flex justify-between items-center mb-6">
                 <span className="font-display font-black text-ink uppercase tracking-tighter text-xl">Sua Parte</span>
-                <span className="font-display font-black text-brand text-2xl">R$ {order.total.toFixed(2)}</span>
+                <span className="font-display font-black text-brand text-2xl">R$ {userTotal.toFixed(2)}</span>
              </div>
           </div>
         </div>
@@ -611,7 +639,7 @@ export default function OrderStatus() {
         </AnimatePresence>
 
         {/* Floating Actions for Dine-in Unpaid */}
-        {order.type === 'dine-in' && !isPaid && (
+        {order.type === 'dine-in' && userPendingTotal > 0 && (
           <div className="space-y-4">
              <button 
                 onClick={handleRequestBill}
@@ -627,8 +655,8 @@ export default function OrderStatus() {
                 onClick={() => navigate('/checkout')}
                 className="w-full h-18 bg-emerald-600 text-white rounded-3xl font-display font-bold text-sm uppercase tracking-[0.2em] shadow-xl shadow-emerald-600/20 active:scale-95 transition-all flex items-center justify-center gap-3"
              >
-                <CreditCard className="w-6 h-6" />
-                Pagar com PIX R$ {order.total.toFixed(2)}
+                <CreditCardIcon className="w-6 h-6" />
+                Pagar com PIX R$ {userPendingTotal.toFixed(2)}
              </button>
           </div>
         )}
@@ -681,26 +709,29 @@ export default function OrderStatus() {
              </div>
 
              <div className="border-y-2 border-dashed border-ink/10 py-6 mb-6 space-y-4">
-                {order.items.map((it, i) => (
-                  <div key={i} className="flex justify-between items-start gap-4">
-                      <div className="flex-1">
-                        <p className="text-xs font-bold text-ink leading-tight">
-                          <span className="text-brand mr-1">{it.quantity}x</span> {it.item.name}
-                        </p>
-                        {it.selectedExtras && it.selectedExtras.length > 0 && (
-                          <p className="text-[8px] text-brand/70 font-medium">
-                            + {it.selectedExtras.map((e: any) => e.name).join(', ')}
+                {userItems.map((it, i) => {
+                  const extrasTotal = (it.selectedExtras || []).reduce((acc: number, cur: any) => acc + cur.price, 0);
+                  return (
+                    <div key={i} className="flex justify-between items-start gap-4">
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-ink leading-tight">
+                            <span className="text-brand mr-1">{it.quantity}x</span> {it.item.name}
                           </p>
-                        )}
-                      </div>
-                      <span className="text-xs font-mono font-black text-ink">R$ {(it.item.price * it.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
+                          {it.selectedExtras && it.selectedExtras.length > 0 && (
+                            <p className="text-[8px] text-brand/70 font-medium">
+                              + {it.selectedExtras.map((e: any) => e.name).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-xs font-mono font-black text-ink">R$ {((it.item.price + extrasTotal) * it.quantity).toFixed(2)}</span>
+                    </div>
+                  );
+                })}
              </div>
 
              <div className="flex justify-between items-center mb-10">
                 <span className="text-[10px] font-black uppercase tracking-widest text-ink-muted">Total Pago</span>
-                <span className="text-4xl font-display font-black text-ink tracking-tighter">R$ {order.total.toFixed(2)}</span>
+                <span className="text-4xl font-display font-black text-ink tracking-tighter">R$ {userTotal.toFixed(2)}</span>
              </div>
 
              <div className="bg-white p-8 rounded-[40px] flex flex-col items-center border-4 border-emerald-500 shadow-xl">

@@ -86,6 +86,19 @@ export default function Checkout() {
   const orders = useStore(state => state.orders);
   const deviceId = useStore(state => state.deviceId);
 
+  const pendingTableTotal = React.useMemo(() => {
+    if (orderType !== 'dine-in' || !tableNumber) return 0;
+    return orders
+      .filter(o => 
+        o.tableNumber === tableNumber && 
+        o.status !== 'finalizado' && 
+        o.status !== 'cancelado' &&
+        o.paymentStatus !== 'paid' &&
+        (o.userId === deviceId || o.deviceId === deviceId)
+      )
+      .reduce((acc, curr) => acc + curr.total, 0);
+  }, [orders, orderType, tableNumber, deviceId]);
+
   // Check if this table already has an active order from this client
   useEffect(() => {
     if (orderType === 'dine-in' && tableNumber) {
@@ -292,7 +305,7 @@ export default function Checkout() {
 
   const discountAmount = total * (couponDiscount / 100);
   const deliveryFeeValue = (orderType === 'delivery' && !isFreeDeliveryCoupon) ? currentDeliveryFee : 0;
-  const finalTotal = total - discountAmount + deliveryFeeValue;
+  const finalTotal = total - discountAmount + deliveryFeeValue + pendingTableTotal;
 
   const handleGetLocation = () => {
     setIsLocating(true);
@@ -359,10 +372,41 @@ export default function Checkout() {
     }
 
     setIsProcessing(true);
-    const feeToCharge = orderType === 'delivery' ? currentDeliveryFee : 0;
-    await placeOrder(paymentMethod, feeToCharge);
-    useStore.getState().clearCart();
-    navigate('/status', { replace: true });
+    
+    try {
+      // 1. If cart has items, place the new order
+      if (cart.length > 0) {
+        const feeToCharge = orderType === 'delivery' ? currentDeliveryFee : 0;
+        await placeOrder(paymentMethod, feeToCharge);
+      }
+
+      // 2. If it's dine-in and payment is upfront (PIX/Credit/Debit), update existing pending orders
+      if (orderType === 'dine-in' && tableNumber && ['pix', 'credit', 'debit'].includes(paymentMethod)) {
+        const userPendingOrders = orders.filter(o => 
+          o.tableNumber === tableNumber && 
+          o.status !== 'finalizado' && 
+          o.status !== 'cancelado' &&
+          o.paymentStatus !== 'paid' &&
+          (o.userId === deviceId || o.deviceId === deviceId)
+        );
+        
+        for (const po of userPendingOrders) {
+           await updateDoc(doc(db, 'orders', po.id), { 
+             paymentStatus: 'paid', 
+             paymentMethod,
+             updatedAt: serverTimestamp() 
+           });
+        }
+      }
+
+      useStore.getState().clearCart();
+      navigate('/status', { replace: true });
+    } catch (e) {
+      console.error("Checkout error:", e);
+      alert("Não foi possível processar o pagamento. Verifique sua conexão.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
