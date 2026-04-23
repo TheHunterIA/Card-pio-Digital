@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs, writeBatch, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { finalizeOrder } from '../../lib/database';
+import { useStore, Order } from '../../store';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldCheck, 
@@ -14,18 +15,51 @@ import {
   Clock,
   User,
   Utensils,
-  ArrowLeft
+  ArrowLeft,
+  LayoutGrid,
+  Search,
+  BellRing
 } from 'lucide-react';
 
 export default function PorterDashboard() {
+  const [viewMode, setViewMode] = useState<'scanner' | 'tables'>('scanner');
   const [scanResult, setScanResult] = useState<any>(null);
   const [scanning, setScanning] = useState(true);
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  
+  const [config, setConfig] = useState<any>(null);
+  const orders = useStore(state => state.orders);
 
   useEffect(() => {
-    if (!scanning) return;
+    return onSnapshot(doc(db, 'settings', 'config'), (snap) => {
+      if (snap.exists()) setConfig(snap.data());
+    });
+  }, []);
+
+  const tables = useMemo(() => {
+    if (!config) return [];
+    const count = config?.tablesCount || 10; // Default to 10 if not set
+    return Array.from({ length: count }, (_, i) => ({
+      id: (i + 1).toString(),
+      label: `Mesa ${i + 1}`
+    }));
+  }, [config]);
+
+  const activeOrdersByTable = useMemo(() => {
+    const map: Record<string, Order[]> = {};
+    orders.filter(o => o.status !== 'finalizado' && o.status !== 'cancelado').forEach(o => {
+      if (o.tableNumber) {
+        if (!map[o.tableNumber]) map[o.tableNumber] = [];
+        map[o.tableNumber].push(o);
+      }
+    });
+    return map;
+  }, [orders]);
+
+  useEffect(() => {
+    if (!scanning || viewMode !== 'scanner') return;
 
     const scanner = new Html5QrcodeScanner(
       "reader",
@@ -47,6 +81,60 @@ export default function PorterDashboard() {
       scanner.clear().catch(e => console.error("Scanner clear error", e));
     };
   }, [scanning]);
+
+  const handleTableClick = (tableId: string) => {
+    setError(null);
+    setScanning(false);
+    
+    const tableOrders = activeOrdersByTable[tableId] || [];
+    
+    if (tableOrders.length === 0) {
+      // Release as visitor
+      setScanResult({
+        id: `VISITOR-${tableId}`,
+        customerName: 'Visitante (Consumo Zero)',
+        tableNumber: tableId,
+        total: 0,
+        isValid: true,
+        isVisitor: true
+      });
+      return;
+    }
+
+    // Process table status
+    let unpaidCount = 0;
+    let unpaidTotal = 0;
+    let totalTableVal = 0;
+
+    tableOrders.forEach(order => {
+      totalTableVal += order.total;
+      if (order.paymentStatus !== 'paid') {
+        unpaidCount++;
+        unpaidTotal += order.total;
+      }
+    });
+
+    if (unpaidCount > 0) {
+      setScanResult({
+        id: `TABLE-${tableId}`,
+        customerName: `Mesa ${tableId} (Agrupado)`,
+        tableNumber: tableId,
+        total: totalTableVal,
+        isValid: false,
+        error: 'EXISTEM PEDIDOS PENDENTES',
+        warning: `${unpaidCount} pedido(s) pendentes (R$ ${unpaidTotal.toFixed(2)})`
+      });
+    } else {
+      setScanResult({
+        id: `TABLE-${tableId}`,
+        customerName: `Mesa ${tableId} (Tudo Pago)`,
+        tableNumber: tableId,
+        total: totalTableVal,
+        isValid: true,
+        warning: 'A confirmação irá encerrar a mesa e liberar os clientes.'
+      });
+    }
+  };
 
   const validatePass = async (text: string) => {
     setValidating(true);
@@ -187,41 +275,57 @@ export default function PorterDashboard() {
         setError('Erro: Comanda não encontrada no sistema.');
       } else {
         const orderData = orderDoc.data();
+        
+        // If it belongs to a table, we should check the whole table status
+        if (orderData.tableNumber) {
+          const tableQ = query(
+            collection(db, 'orders'), 
+            where('tableNumber', '==', orderData.tableNumber), 
+            where('status', 'not-in', ['finalizado', 'cancelado'])
+          );
+          const tableSnap = await getDocs(tableQ);
+          
+          let unpaidCount = 0;
+          let unpaidTotal = 0;
+          let totalTableVal = 0;
+
+          tableSnap.forEach(d => {
+            totalTableVal += d.data().total;
+            if (d.data().paymentStatus !== 'paid') {
+              unpaidCount++;
+              unpaidTotal += d.data().total;
+            }
+          });
+
+          if (unpaidCount > 0) {
+            setScanResult({
+              id: `TABLE-${orderData.tableNumber}`,
+              customerName: `Mesa ${orderData.tableNumber} (Agrupado)`,
+              tableNumber: orderData.tableNumber,
+              total: totalTableVal,
+              isValid: false,
+              error: 'EXISTEM PEDIDOS PENDENTES',
+              warning: `${unpaidCount} pedido(s) pendentes (R$ ${unpaidTotal.toFixed(2)})`
+            });
+          } else {
+            setScanResult({
+              id: `TABLE-${orderData.tableNumber}`,
+              customerName: `Mesa ${orderData.tableNumber} (Tudo Pago)`,
+              tableNumber: orderData.tableNumber,
+              total: totalTableVal,
+              isValid: true,
+              warning: 'A confirmação irá encerrar a mesa e liberar os clientes.'
+            });
+          }
+          return;
+        }
+
         if (orderData.paymentStatus === 'paid') {
-           let warningMsg = null;
-           // Check the rest of the table if applicable
-           if (orderData.tableNumber) {
-               const tableQ = query(
-                 collection(db, 'orders'), 
-                 where('tableNumber', '==', orderData.tableNumber), 
-                 where('status', 'not-in', ['finalizado', 'cancelado'])
-               );
-               const tableSnap = await getDocs(tableQ);
-               
-               let unpaidCount = 0;
-               let unpaidTotal = 0;
-
-               tableSnap.forEach(d => {
-                   if (d.id !== orderId) {
-                       if (d.data().paymentStatus !== 'paid') {
-                           unpaidCount++;
-                           unpaidTotal += d.data().total;
-                       }
-                   }
-               });
-
-               if (unpaidCount > 0) {
-                   warningMsg = `RESTAM ${unpaidCount} PEDIDO(S) NÃO PAGOS NA MESA ${orderData.tableNumber} (Total: R$ ${unpaidTotal.toFixed(2)}). VERIFIQUE SE O CLIENTE É O ÚLTIMO NA MESA.`;
-               }
-           }
-
           setScanResult({
             id: orderDoc.id,
             ...orderData,
-            isValid: true,
-            warning: warningMsg
+            isValid: true
           });
-          // Optionally mark as "already used" in a real production sys
         } else {
           setScanResult({
             id: orderDoc.id,
@@ -232,6 +336,7 @@ export default function PorterDashboard() {
         }
       }
     } catch (e: any) {
+      console.error(e);
       setError('Falha na conexão com o banco de dados.');
     } finally {
       setValidating(false);
@@ -285,37 +390,104 @@ export default function PorterDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Main Grid */}
+      {/* Porter Navigation */}
+      <div className="max-w-4xl mx-auto px-6 pt-4">
+        <div className="bg-white rounded-3xl p-2 shadow-sm border border-black/5 flex gap-2">
+          <button 
+            onClick={() => { setViewMode('scanner'); handleReset(); }}
+            className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl font-display font-black uppercase tracking-widest text-[10px] transition-all ${
+              viewMode === 'scanner' ? 'bg-ink text-white shadow-lg' : 'bg-transparent text-ink-muted hover:bg-oat'
+            }`}
+          >
+            <QrCode className="w-5 h-5" /> Scanner
+          </button>
+          <button 
+            onClick={() => { setViewMode('tables'); handleReset(); }}
+            className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl font-display font-black uppercase tracking-widest text-[10px] transition-all ${
+              viewMode === 'tables' ? 'bg-ink text-white shadow-lg' : 'bg-transparent text-ink-muted hover:bg-oat'
+            }`}
+          >
+            <LayoutGrid className="w-5 h-5" /> Gestão de Mesas
+          </button>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-2 gap-8 items-start p-6 max-w-4xl mx-auto space-y-8">
         
-        {/* Scanner Section */}
+        {/* Left Side: Scanner or Tables Grid */}
         <div className="space-y-6">
-          <div className="bg-white rounded-[40px] p-8 border border-black/5 shadow-xl overflow-hidden relative">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="font-display font-bold text-ink flex items-center gap-2">
-                <QrCode className="w-5 h-5 text-blue-600" /> Scanner de Saída
-              </h2>
-              {scanning && (
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Ativo</span>
+          {viewMode === 'scanner' ? (
+            <div className="bg-white rounded-[40px] p-8 border border-black/5 shadow-xl overflow-hidden relative">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="font-display font-bold text-ink flex items-center gap-2">
+                  <QrCode className="w-5 h-5 text-blue-600" /> Scanner de Saída
+                </h2>
+                {scanning && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Ativo</span>
+                  </div>
+                )}
+              </div>
+
+              <div id="reader" className={`${!scanning ? 'hidden' : ''} rounded-3xl overflow-hidden border-2 border-dashed border-black/10`} />
+              
+              {!scanning && (
+                <div className="py-20 flex flex-col items-center justify-center text-center">
+                   <button 
+                    onClick={handleReset}
+                    className="bg-ink text-white px-8 py-4 rounded-2xl font-display font-bold uppercase tracking-widest text-xs flex items-center gap-3 active:scale-95 transition-all shadow-xl"
+                   >
+                     <RefreshCw className="w-4 h-4" /> Novo Escaneamento
+                   </button>
                 </div>
               )}
             </div>
-
-            <div id="reader" className={`${!scanning ? 'hidden' : ''} rounded-3xl overflow-hidden border-2 border-dashed border-black/10`} />
-            
-            {!scanning && (
-              <div className="py-20 flex flex-col items-center justify-center text-center">
-                 <button 
-                  onClick={handleReset}
-                  className="bg-ink text-white px-8 py-4 rounded-2xl font-display font-bold uppercase tracking-widest text-xs flex items-center gap-3 active:scale-95 transition-all shadow-xl"
-                 >
-                   <RefreshCw className="w-4 h-4" /> Novo Escaneamento
-                 </button>
+          ) : (
+            <div className="bg-white rounded-[40px] p-8 border border-black/5 shadow-xl overflow-hidden relative min-h-[400px]">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="font-display font-bold text-ink flex items-center gap-2">
+                  <LayoutGrid className="w-5 h-5 text-brand" /> Gestão de Mesas
+                </h2>
               </div>
-            )}
-          </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                {tables.map(table => {
+                   const tableOrders = activeOrdersByTable[table.id] || [];
+                   const isOccupied = tableOrders.length > 0;
+                   const hasPending = tableOrders.some(o => o.paymentStatus !== 'paid');
+                   const hasReady = tableOrders.some(o => o.status === 'pronto-entrega' || o.status === 'saiu-entrega');
+
+                   return (
+                     <motion.button
+                       key={table.id}
+                       whileHover={{ scale: 1.05 }}
+                       whileTap={{ scale: 0.95 }}
+                       onClick={() => handleTableClick(table.id)}
+                       className={`aspect-square rounded-3xl border-2 flex flex-col items-center justify-center gap-1 transition-all relative ${
+                         hasReady 
+                           ? 'bg-brand border-brand text-white shadow-lg animate-pulse'
+                           : hasPending 
+                             ? 'bg-amber-50 border-amber-200 text-amber-700 shadow-sm'
+                             : isOccupied 
+                               ? 'bg-ink border-ink text-white shadow-md'
+                               : 'bg-oat/50 border-black/5 text-ink-muted hover:border-brand/30'
+                       }`}
+                     >
+                        <span className="font-display font-black text-2xl">{table.id}</span>
+                        <div className="flex gap-1">
+                          {hasPending && <ShieldAlert className="w-3 h-3" />}
+                          {isOccupied && !hasPending && <CheckCircle2 className="w-3 h-3" />}
+                        </div>
+                        <span className="text-[7px] font-black uppercase tracking-widest mt-1 opacity-60">
+                           {hasReady ? 'Pronto' : hasPending ? 'Pendente' : isOccupied ? 'Ativa' : 'Livre'}
+                        </span>
+                     </motion.button>
+                   );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="bg-white/50 border border-black/5 rounded-[32px] p-6 text-[11px] font-medium text-ink-muted leading-relaxed">
             <ShieldCheck className="w-4 h-4 mb-2 opacity-50" />

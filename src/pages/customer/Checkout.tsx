@@ -4,7 +4,7 @@ import { useStore, PaymentMethod } from '../../store';
 import { placeOrder } from '../../lib/database';
 import { doc, getDoc, query, collection, where, getDocs, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase';
-import { QrCode, Banknote, MapPin, Store, X, CreditCard, Smartphone, Check, Percent, Camera, AlertTriangle } from 'lucide-react';
+import { QrCode, Banknote, MapPin, Store, X, CreditCard, Smartphone, Check, Percent, Camera, AlertTriangle, UtensilsCrossed } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import IdentifyModal from '../../components/IdentifyModal';
 import GooglePlacesAutocomplete, { geocodeByAddress, getLatLng } from 'react-google-places-autocomplete';
@@ -82,6 +82,25 @@ export default function Checkout() {
   const [storeConfig, setStoreConfig] = useState<any>(null);
   const [isOutOfRange, setIsOutOfRange] = useState(false);
   const [currentDeliveryFee, setCurrentDeliveryFee] = useState(0);
+  const [hasActiveTableOrder, setHasActiveTableOrder] = useState(false);
+  const orders = useStore(state => state.orders);
+  const deviceId = useStore(state => state.deviceId);
+
+  // Check if this table already has an active order from this client
+  useEffect(() => {
+    if (orderType === 'dine-in' && tableNumber) {
+      const active = orders.some(o => 
+        o.tableNumber === tableNumber && 
+        o.status !== 'finalizado' && 
+        o.status !== 'cancelado' &&
+        o.paymentStatus !== 'paid' &&
+        (o.userId === deviceId || o.deviceId === deviceId)
+      );
+      setHasActiveTableOrder(active);
+    } else {
+      setHasActiveTableOrder(false);
+    }
+  }, [orders, orderType, tableNumber, deviceId]);
 
   // Sync orderType if table exists
   useEffect(() => {
@@ -652,6 +671,28 @@ export default function Checkout() {
           <h2 className="font-display font-bold text-ink mb-4 px-1 text-lg tracking-tight">Forma de Pagamento</h2>
           <div className="space-y-4">
             
+            {orderType === 'dine-in' && !requireUpfrontPayment && (
+              <button 
+                onClick={() => setPaymentMethod('na-entrega')}
+                className={`w-full flex items-center p-5 rounded-3xl border-2 transition-all active:scale-[0.98] ${
+                  paymentMethod === 'na-entrega' 
+                  ? 'border-brand bg-brand/5 shadow-[0_8px_20px_-6px_rgba(255,78,0,0.15)]' 
+                  : 'border-black/5 bg-white hover:border-black/10 shadow-sm'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-4 transition-colors ${paymentMethod === 'na-entrega' ? 'bg-brand text-white shadow-md' : 'bg-oat text-ink border border-black/5'}`}>
+                  <UtensilsCrossed className="w-6 h-6" strokeWidth={2.5} />
+                </div>
+                <div className="text-left flex-1">
+                  <h3 className="font-display font-bold text-ink text-base">Adicionar à Comanda</h3>
+                  <p className="text-brand text-sm font-semibold tracking-wide">Pagar ao finalizar atendimento</p>
+                </div>
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'na-entrega' ? 'border-brand bg-white' : 'border-black/10'}`}>
+                  {paymentMethod === 'na-entrega' && <div className="w-3 h-3 bg-brand rounded-full" />}
+                </div>
+              </button>
+            )}
+
             {storeConfig?.acceptedPaymentMethods?.pix !== false && (
               <button 
                 onClick={() => setPaymentMethod('pix')}
@@ -718,7 +759,7 @@ export default function Checkout() {
               </button>
             )}
 
-            {storeConfig?.acceptedPaymentMethods?.['na-entrega'] !== false && (
+            {storeConfig?.acceptedPaymentMethods?.['na-entrega'] !== false && orderType !== 'dine-in' && (
               <button 
                 onClick={() => {
                   if (requireUpfrontPayment) return;
@@ -737,7 +778,7 @@ export default function Checkout() {
                 </div>
                 <div className="text-left flex-1">
                   <h3 className={`font-display font-bold text-base ${paymentMethod === 'na-entrega' ? 'text-white' : 'text-ink'}`}>
-                    {orderType === 'dine-in' ? 'Pagar no Caixa' : 'Pagar na Entrega'}
+                    Pagar na Entrega
                   </h3>
                   <p className={`text-sm font-medium ${paymentMethod === 'na-entrega' ? 'text-white/70' : 'text-ink-muted'}`}>
                     {requireUpfrontPayment ? 'Indisponível (Valid. Endereço)' : 'Cartão ou Dinheiro'}
@@ -767,7 +808,7 @@ export default function Checkout() {
                 className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full"
               />
             ) : (
-              `Enviar Pedido • ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(finalTotal)}`
+              `${hasActiveTableOrder ? 'Adicionar à Comanda' : (orderType === 'dine-in' ? 'Confirmar Pedido' : 'Finalizar Pedido')} • ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(finalTotal)}`
             )}
           </button>
         </div>

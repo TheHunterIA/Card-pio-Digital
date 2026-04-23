@@ -381,6 +381,29 @@ export default function Menu() {
              <UtensilsCrossed className="w-5 h-5 text-brand" />
           </div>
         </div>
+
+        {/* ACTIVE TABLE SESSION INDICATOR */}
+        {tableNumber && (
+          <motion.div 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="mb-6 p-4 bg-brand text-white rounded-[24px] shadow-[0_10px_20px_-5px_rgba(255,78,0,0.3)] flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+               <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                  <UtensilsCrossed className="w-5 h-5" />
+               </div>
+               <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Atendimento Ativo</p>
+                  <p className="font-display font-black text-lg uppercase tracking-tight leading-none">Mesa {tableNumber}</p>
+               </div>
+            </div>
+            <div className="text-right">
+               <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-1">Adicione à sua</p>
+               <span className="bg-white text-brand px-3 py-1 rounded-full text-[10px] font-black uppercase">COMANDA</span>
+            </div>
+          </motion.div>
+        )}
         
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-ink-muted group-focus-within:text-brand transition-colors">

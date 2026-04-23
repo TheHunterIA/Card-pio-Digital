@@ -118,22 +118,6 @@ export default function Welcome() {
   const tableNumber = useStore(state => state.tableNumber);
   const orderType = useStore(state => state.orderType);
 
-  // Monitor the table session status in real-time
-  useEffect(() => {
-    if (!tableNumber) return;
-
-    const sessionRef = doc(db, 'sessions', `table-${tableNumber}`);
-    const unsub = onSnapshot(sessionRef, (snap) => {
-      if (snap.exists() && snap.data().status === 'closed') {
-        // If session is closed by porter, clear the table and allow delivery again
-        setTableNumber('');
-        setOrderType('delivery');
-      }
-    });
-
-    return () => unsub();
-  }, [tableNumber, setTableNumber, setOrderType]);
-
   const handleReturnToTable = () => {
     navigate('/cardapio');
   };
@@ -196,72 +180,71 @@ export default function Welcome() {
               <p className="text-ink-muted mb-10 font-medium text-center px-4">Os melhores burgers da cidade, prontos para você.</p>
               
               <div className="space-y-4">
-                {tableNumber && orderType === 'dine-in' ? (
-                  <>
+                {activeOrder ? (
+                  /* EXTREME PROTECTED MODE: User has an active dine-in session */
+                  <div className="space-y-6">
+                    <div className="p-8 bg-emerald-50 border-2 border-emerald-100 rounded-[40px] text-center relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/50 rounded-bl-[100%] transition-transform group-hover:scale-110" />
+                      <div className="relative z-10 flex flex-col items-center">
+                        <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-[24px] flex items-center justify-center mb-4 shadow-sm">
+                           <UtensilsCrossed className="w-8 h-8" strokeWidth={2.5} />
+                        </div>
+                        <h3 className="text-2xl font-display font-black text-emerald-900 uppercase tracking-tight">Atendimento Ativo</h3>
+                        <p className="text-emerald-700/70 text-xs font-bold uppercase tracking-widest mt-1">Mesa {activeOrder.tableNumber}</p>
+                      </div>
+                    </div>
+
                     <button 
                       onClick={handleReturnToTable}
                       className="w-full flex items-center justify-between p-6 bg-brand text-white rounded-[24px] active:scale-[0.98] transition-all shadow-[0_15px_30px_-8px_rgba(255,78,0,0.4)] group"
                     >
                       <div className="text-left">
-                        <h3 className="font-display font-bold text-xl uppercase tracking-tight">Continuar Pedindo</h3>
-                        <p className="text-white/70 text-sm font-medium">Você está na Mesa {tableNumber}</p>
+                        <h3 className="font-display font-black text-xl uppercase tracking-tight">Fazer Novo Pedido</h3>
+                        <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest">Adicionar à comanda aberta</p>
                       </div>
-                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                        <UtensilsCrossed className="w-6 h-6 text-white" strokeWidth={3} />
+                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center group-hover:rotate-12 transition-transform">
+                        <ChevronRight className="w-6 h-6" strokeWidth={3} />
                       </div>
                     </button>
-                    
-                    {/* If they have an active order at the table, we disable/hide the switch to delivery */}
-                    {activeOrder ? (
-                      <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 mt-2">
-                        <p className="text-[10px] text-emerald-700 font-bold uppercase tracking-widest text-center italic">
-                          Sessão ativa na Mesa {tableNumber}.<br/>Libere sua comanda na portaria para novos pedidos delivery.
-                        </p>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={handleDeliveryStart}
-                        className="w-full flex items-center gap-4 p-5 border-2 border-black/5 bg-oat/30 rounded-[24px] hover:border-brand/30 hover:bg-white transition-all active:scale-[0.98] text-left group"
-                      >
-                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-black/5 group-hover:text-emerald-500 transition-colors">
-                          <MapPin className="w-6 h-6" strokeWidth={2} />
-                        </div>
-                        <div>
-                          <h3 className="font-display font-bold text-ink">Pedir para Viagem / Delivery</h3>
-                          <p className="text-ink-muted text-xs font-medium">Lêvarei para casa ou entreguem para mim</p>
-                        </div>
-                      </button>
-                    )}
-                  </>
+
+                    <div className="pt-4 border-t border-black/5 flex flex-col items-center">
+                       <p className="text-[10px] text-ink-muted font-bold uppercase tracking-widest text-center leading-relaxed">
+                         Para pedir delivery, libere sua comanda<br/>com o atendente ou na portaria.
+                       </p>
+                    </div>
+                  </div>
                 ) : (
+                  /* Standard Mode: No active session */
                   <>
                     <button 
                       onClick={handleDeliveryStart}
-                      className="w-full flex items-center justify-between p-6 bg-brand text-white rounded-[24px] active:scale-[0.98] transition-all shadow-[0_15px_30px_-8px_rgba(255,78,0,0.4)] group"
+                      className="w-full flex items-center justify-between p-7 bg-brand text-white rounded-[32px] active:scale-[0.98] transition-all shadow-[0_20px_40px_-10px_rgba(255,78,0,0.4)] group"
                     >
                       <div className="text-left">
-                        <h3 className="font-display font-bold text-xl uppercase tracking-tight">Pedir Delivery</h3>
-                        <p className="text-white/70 text-sm font-medium">Receba em casa agora</p>
+                        <h3 className="font-display font-black text-2xl uppercase tracking-tight italic">PEDIR DELIVERY</h3>
+                        <p className="text-white/70 text-xs font-bold uppercase tracking-widest">Receba em casa agora</p>
                       </div>
-                      <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" strokeWidth={3} />
+                      <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center group-hover:translate-x-1 transition-all">
+                        <ChevronRight className="w-8 h-8" strokeWidth={3} />
+                      </div>
                     </button>
 
-                    <div className="relative flex items-center py-4">
+                    <div className="relative flex items-center py-6">
                       <div className="flex-grow border-t border-black/5"></div>
-                      <span className="flex-shrink-0 mx-4 text-ink-muted/40 text-[10px] font-display font-bold uppercase tracking-[0.2em]">Está no restaurante?</span>
+                      <span className="flex-shrink-0 mx-4 text-ink-muted/30 text-[10px] font-display font-black uppercase tracking-[0.3em]">Ou</span>
                       <div className="flex-grow border-t border-black/5"></div>
                     </div>
 
                     <button 
                       onClick={() => setIsScanning(true)}
-                      className="w-full flex items-center gap-4 p-5 border-2 border-black/5 bg-oat/30 rounded-[24px] hover:border-brand/30 hover:bg-white transition-all active:scale-[0.98] text-left group"
+                      className="w-full flex items-center gap-5 p-6 border-2 border-black/5 bg-oat/30 rounded-[32px] hover:border-brand/30 hover:bg-white transition-all active:scale-[0.98] text-left group"
                     >
-                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-black/5 group-hover:text-brand transition-colors">
-                        <QrCode className="w-6 h-6" strokeWidth={2} />
+                      <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-black/5 group-hover:text-brand transition-colors">
+                        <QrCode className="w-8 h-8" strokeWidth={2.5} />
                       </div>
                       <div>
-                        <h3 className="font-display font-bold text-ink">Escanear Mesa</h3>
-                        <p className="text-ink-muted text-xs font-medium">Identifique sua mesa por QR Code</p>
+                        <h3 className="font-display font-black text-ink uppercase tracking-tight text-lg leading-tight">Escaneie sua Mesa</h3>
+                        <p className="text-ink-muted text-[10px] font-bold uppercase tracking-widest mt-1">Para consumo no local</p>
                       </div>
                     </button>
                   </>

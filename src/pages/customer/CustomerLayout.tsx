@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ShoppingBag, ChevronLeft, Home, UtensilsCrossed, ClipboardList } from 'lucide-react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, query, collection, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useStore, Order } from '../../store';
 import { motion, AnimatePresence } from 'motion/react';
@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function CustomerLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { cart, currentOrderId, tableNumber, orderType, setOrderType } = useStore();
+  const { cart, currentOrderId, tableNumber, setTableNumber, orderType, setOrderType, setOrders, deviceId } = useStore();
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
   
   // GLOBAL ENFORCEMENT: If tableNumber exists, orderType MUST be dine-in
@@ -19,30 +19,44 @@ export default function CustomerLayout() {
     }
   }, [tableNumber, orderType, setOrderType]);
 
-  const isHome = location.pathname === '/';
-  const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
-
+  // Subscribe to ALL user orders in real-time to keep UI in sync
   useEffect(() => {
-    if (!currentOrderId) {
-      setHasActiveOrder(false);
-      return;
-    }
+    const q = query(
+      collection(db, 'orders'),
+      where('deviceId', '==', deviceId)
+    );
 
-    const unsub = onSnapshot(doc(db, 'orders', currentOrderId), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data() as Order;
-        setHasActiveOrder(data.status !== 'finalizado' && data.status !== 'cancelado');
-      } else {
-        setHasActiveOrder(false);
+    const unsub = onSnapshot(q, (snap) => {
+      const ordersData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      setOrders(ordersData);
+      
+      // Also update hasActiveOrder based on ALL active orders, not just currentOrderId
+      const active = ordersData.find(o => o.status !== 'finalizado' && o.status !== 'cancelado');
+      setHasActiveOrder(!!active);
+
+      // SAFETY: If we find an active dine-in order but tableNumber is missing locally, restore it
+      if (active && active.type === 'dine-in' && active.tableNumber && !tableNumber) {
+        setTableNumber(active.tableNumber);
       }
-    }, (error) => {
-      console.error("Layout order snapshot error:", error);
-      useStore.getState().setCurrentOrderId(null);
-      setHasActiveOrder(false);
     });
 
     return () => unsub();
-  }, [currentOrderId]);
+  }, [deviceId, setOrders]);
+
+  // Monitor session status
+  useEffect(() => {
+    if (!tableNumber) return;
+    const sessionRef = doc(db, 'sessions', `table-${tableNumber}`);
+    return onSnapshot(sessionRef, (snap) => {
+      if (snap.exists() && snap.data().status === 'closed') {
+        setTableNumber('');
+        setOrderType('delivery');
+      }
+    });
+  }, [tableNumber, setTableNumber, setOrderType]);
+
+  const isHome = location.pathname === '/';
+  const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
   const navItems = [
     { label: 'Início', icon: Home, path: '/' },
