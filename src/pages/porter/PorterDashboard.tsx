@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import { Html5Qrcode } from 'html5-qrcode';
 import { doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs, writeBatch, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -18,7 +20,9 @@ import {
   ArrowLeft,
   LayoutGrid,
   Search,
-  BellRing
+  BellRing,
+  Crop as CropIcon,
+  Check
 } from 'lucide-react';
 
 export default function PorterDashboard() {
@@ -29,6 +33,12 @@ export default function PorterDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
   
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [isCropping, setIsCropping] = useState(false);
+
   const [config, setConfig] = useState<any>(null);
   const [activeSessions, setActiveSessions] = useState<Record<string, any>>({});
   const orders = useStore(state => state.orders);
@@ -69,6 +79,71 @@ export default function PorterDashboard() {
     });
     return map;
   }, [orders]);
+
+  const scanExtractedImage = async (file: File) => {
+    setCropImageSrc(null);
+    setIsCropping(false);
+    setScanning(false);
+    setValidating(true);
+    try {
+      const decodedText = await Html5Qrcode.scanFile(file, false);
+      validatePass(decodedText);
+    } catch (err) {
+      console.error(err);
+      setError('Erro ao ler QR Code da imagem. Redefina o recorte ou tente outra foto.');
+      setValidating(false);
+      setScanning(true);
+    }
+  };
+
+  const processCroppedImage = async () => {
+    if (!imgRef.current) return;
+    
+    if (!completedCrop || completedCrop.width === 0 || completedCrop.height === 0) {
+      if (cropImageSrc) {
+        try {
+          const res = await fetch(cropImageSrc);
+          const blob = await res.blob();
+          const file = new File([blob], 'image.jpg', { type: 'image/jpeg' });
+          scanExtractedImage(file);
+        } catch (e) {
+          setError('Erro ao processar imagem.');
+        }
+      }
+      return;
+    }
+    
+    try {
+      const canvas = document.createElement('canvas');
+      const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
+      const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
+      canvas.width = completedCrop.width;
+      canvas.height = completedCrop.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      ctx.drawImage(
+        imgRef.current,
+        completedCrop.x * scaleX,
+        completedCrop.y * scaleY,
+        completedCrop.width * scaleX,
+        completedCrop.height * scaleY,
+        0,
+        0,
+        completedCrop.width,
+        completedCrop.height
+      );
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const file = new File([blob], 'cropped.jpg', { type: 'image/jpeg' });
+        scanExtractedImage(file);
+      }, 'image/jpeg');
+    } catch (e) {
+      console.error(e);
+      setError('Erro ao recortar imagem.');
+    }
+  };
 
   // Modern Scanner Logic
   useEffect(() => {
@@ -601,20 +676,21 @@ export default function PorterDashboard() {
                         type="file" 
                         accept="image/*" 
                         className="hidden" 
-                        onChange={async (e) => {
+                        onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
                           
-                          setScanning(false);
-                          setValidating(true);
-                          try {
-                            const decodedText = await Html5Qrcode.scanFile(file, true);
-                            validatePass(decodedText);
-                          } catch (err) {
-                            console.error(err);
-                            setError('Erro ao ler QR Code da imagem.');
-                            setValidating(false);
+                          if (scannerInstance) {
+                            scannerInstance.stop().catch(console.error);
                           }
+                          
+                          setScanning(false);
+                          const reader = new FileReader();
+                          reader.addEventListener('load', () => {
+                            setCropImageSrc(reader.result?.toString() || null);
+                            setIsCropping(true);
+                          });
+                          reader.readAsDataURL(file);
                         }}
                       />
                       Galeria
@@ -758,6 +834,74 @@ export default function PorterDashboard() {
                       </button>
                     );
                   })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
+          {/* Crop Modal */}
+          <AnimatePresence>
+            {isCropping && cropImageSrc && (
+              <motion.div 
+                className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex flex-col"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <div className="flex justify-between items-center p-4 border-b border-white/10">
+                  <h3 className="text-white font-display font-black tracking-widest text-sm uppercase">Recortar QR Code</h3>
+                  <button 
+                    onClick={() => {
+                      setIsCropping(false);
+                      setCropImageSrc(null);
+                      setScanning(true);
+                      setScanResult(null);
+                    }}
+                    className="p-2 text-white/50 hover:text-white"
+                  >
+                    <XCircle className="w-6 h-6" />
+                  </button>
+                </div>
+                
+                <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(c) => setCrop(c)}
+                    onComplete={(c) => setCompletedCrop(c)}
+                    className="max-h-full"
+                  >
+                    <img 
+                      ref={imgRef}
+                      src={cropImageSrc} 
+                      alt="Crop target" 
+                      className="max-h-[70vh] object-contain"
+                      onLoad={(e) => {
+                         const img = e.currentTarget;
+                         if (!crop && img.width > 0) {
+                           setCrop({
+                             unit: '%',
+                             width: 50,
+                             height: 50,
+                             x: 25,
+                             y: 25
+                           });
+                         }
+                      }}
+                    />
+                  </ReactCrop>
+                </div>
+
+                <div className="p-6 pb-safe border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
+                  <p className="text-white/60 text-[10px] uppercase tracking-widest font-bold font-display text-center md:text-left">
+                    Arraste os cantos pare selecionar apenas a área do QRCode e confirme
+                  </p>
+                  <button 
+                    onClick={processCroppedImage}
+                    className="w-full md:w-auto bg-brand text-white font-display font-black uppercase text-xs tracking-widest py-4 px-8 rounded-2xl flex justify-center items-center gap-2 hover:bg-brand-light transition-colors"
+                  >
+                    <CropIcon className="w-4 h-4" />
+                    Confirmar
+                  </button>
                 </div>
               </motion.div>
             )}
