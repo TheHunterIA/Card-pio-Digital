@@ -539,17 +539,18 @@ export async function releaseTableSession(tableId: string) {
       }
     });
 
-    // Check again after processing
-    const ordersSnapAfter = await getDocs(ordersQuery);
-    if (!ordersSnapAfter.empty) {
-      // Still pending orders?
-      throw new Error(`Ainda existem ${ordersSnapAfter.size} pedidos pendentes nesta mesa.`);
-    }
-
     await runTransaction(db, async (transaction) => {
       // 2. Validate session
       const sessionRef = doc(db, 'sessions', `table-${tableId}`);
       const sessionSnap = await transaction.get(sessionRef);
+
+      // 3. Mark orders as finalized
+      ordersSnap.forEach(d => {
+        transaction.update(d.ref, { 
+          status: 'finalizado', 
+          updatedAt: serverTimestamp() 
+        });
+      });
 
       // 4. Close session
       if (sessionSnap.exists()) {
