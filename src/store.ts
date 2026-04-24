@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type OrderType = 'dine-in' | 'delivery';
-export type OrderStatus = 'na-fila' | 'preparando' | 'saiu-entrega' | 'finalizado' | 'cancelado' | 'pronto-entrega' | 'em-rota' | 'servido';
+export type OrderStatus = 'na-fila' | 'preparando' | 'saiu-entrega' | 'finalizado' | 'cancelado' | 'pronto-entrega' | 'em-rota' | 'servido' | 'recebido';
 export type PaymentMethod = 'pix' | 'credit' | 'debit' | 'na-entrega';
 
 export interface DriverLocation {

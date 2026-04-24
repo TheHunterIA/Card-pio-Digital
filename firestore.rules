@@ -47,6 +47,8 @@ service cloud.firestore {
           || (oldStatus == 'saiu-entrega' && (newStatus == 'em-rota' || newStatus == 'finalizado' || newStatus == 'cancelado'))
           || (oldStatus == 'em-rota' && (newStatus == 'finalizado' || newStatus == 'cancelado'))
           || (oldStatus == 'servido' && newStatus == 'finalizado')
+          // Cliente pode marcar como servido a partir de qualquer estado não finalizado
+          || (newStatus == 'servido' && oldStatus != 'finalizado' && oldStatus != 'cancelado')
           // Admin override para cancelamento (exceto se já tiver finalizado)
           || (isAdmin() && oldStatus != 'finalizado' && newStatus == 'cancelado');
     }
@@ -127,6 +129,8 @@ service cloud.firestore {
                         (incoming().status == 'finalizado' && isStatusTransitionValid(existing().status, incoming().status) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paymentStatus', 'updatedAt'])) ||
                         // Finalize manually (already paid)
                         (incoming().status == 'finalizado' && isStatusTransitionValid(existing().status, incoming().status) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                        // Mark as served
+                        (incoming().status == 'servido' && isStatusTransitionValid(existing().status, incoming().status) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
                         // Payment flow: pending -> paid (immutable once paid)
                         (incoming().paymentStatus == 'paid' && existing().paymentStatus == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'paymentMethod', 'updatedAt'])) ||
                         // Bill request: false -> true (cannot be reversed)

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc, collection, query, where, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useStore, Order } from '../../store';
-import { updateOrderStatus, finalizeOrder } from '../../lib/database';
+import { markOrderAsServed } from '../../lib/database';
 import { 
   CheckCircle2, 
   QrCode, 
@@ -87,6 +87,8 @@ export default function OrderStatus() {
           }
           return { orders: [...state.orders, orderData] };
         });
+        
+        setHasRated(!!orderData.rating);
       }
       setIsChecking(false);
     }, (error) => {
@@ -195,9 +197,9 @@ export default function OrderStatus() {
     setIsFinalizing(true);
     setShowConfirmation(false);
     try {
-      await finalizeOrder(order.id);
+      await markOrderAsServed(order.id);
     } catch (error: any) {
-      console.error('Falha crítica ao finalizar:', error);
+      console.error('Falha crítica ao confirmar recebimento:', error);
       alert('Não conseguimos conectar ao nosso servidor. Verifique sua rede e tente novamente.');
     }
     setIsFinalizing(false);
@@ -668,7 +670,7 @@ export default function OrderStatus() {
         )}
 
         {/* Receive Confirmation for Delivery */}
-        {order.type === 'delivery' && (order.status === 'em-rota' || order.status === 'saiu-entrega' || order.status === 'pronto-entrega') && (
+        {order.status !== 'servido' && order.status !== 'finalizado' && order.status !== 'cancelado' && (
           <button 
             disabled={isFinalizing}
             onClick={() => setShowConfirmation(true)}

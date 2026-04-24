@@ -325,8 +325,11 @@ export async function placeOrder(paymentMethod: PaymentMethod, deliveryFee: numb
         const sessionRef = doc(db, 'sessions', sessionId);
         const sessionSnap = await transaction.get(sessionRef);
         
-        if (sessionSnap.exists() && sessionSnap.data().status === 'closed') {
-          throw new Error("Esta mesa foi encerrada e não pode receber novos pedidos.");
+        if (sessionSnap.exists()) {
+          const sessionData = sessionSnap.data();
+          if (sessionData.status === 'closed') {
+            throw new Error("Esta mesa foi encerrada e não pode receber novos pedidos.");
+          }
         }
 
         transaction.set(sessionRef, {
@@ -527,6 +530,17 @@ export async function markManualPayment(orderId: string) {
   }
 }
 
+export async function markOrderAsServed(orderId: string) {
+  try {
+    await updateDoc(doc(db, 'orders', orderId), {
+      status: 'servido',
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, 'update', `orders/${orderId}`, auth.currentUser);
+  }
+}
+
 export async function releaseTableSession(tableId: string) {
   try {
     // 1. Get all active orders for this table outside the transaction
@@ -606,25 +620,6 @@ export async function validateAndConsumePortierPass(token: string, tableId: stri
         tableId,
         consumedBy: auth.currentUser?.uid || 'porter'
       });
-      
-      // If it's a visitor pass, we also close the session and orders for that table
-      const sessionRef = doc(db, 'sessions', `table-${tableId}`);
-      const sessionSnap = await transaction.get(sessionRef);
-      if (sessionSnap.exists() && sessionSnap.data().activeVisitorSalt) {
-         transaction.update(sessionRef, {
-           activeVisitorSalt: null,
-           status: 'closed',
-           closedAt: serverTimestamp()
-         });
-
-         // Close active orders
-         ordersSnap.forEach(d => {
-           transaction.update(d.ref, { 
-             status: 'finalizado', 
-             updatedAt: serverTimestamp() 
-           });
-         });
-      }
       
       return true;
     });
