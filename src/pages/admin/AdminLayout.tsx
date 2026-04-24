@@ -73,16 +73,6 @@ export default function AdminLayout() {
 
         <nav className="flex-1 px-5 space-y-3 mt-8">
           <NavLink 
-            to="/cozinha" 
-            className={({isActive}) => `flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all group ${
-              isActive ? 'bg-brand text-white shadow-md' : 'text-ink-muted hover:text-ink hover:bg-oat border border-transparent'
-            }`}
-          >
-            <ChefHat className={`w-6 h-6 transition-transform group-hover:scale-110`} strokeWidth={2.5} />
-            <span className="font-display font-bold tracking-wide">Cozinha (KDS)</span>
-          </NavLink>
-
-          <NavLink 
             to="/admin/financeiro" 
             className={({isActive}) => `flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all group ${
               isActive ? 'bg-brand text-white shadow-md' : 'text-ink-muted hover:text-ink hover:bg-oat border border-transparent'
@@ -227,17 +217,6 @@ export default function AdminLayout() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <NavLink 
-                  to="/cozinha" 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={({isActive}) => `flex items-center justify-center gap-2 p-3 rounded-xl border transition-all ${
-                    isActive ? 'bg-brand text-white border-brand shadow-md' : 'bg-oat border-black/5 text-ink font-bold'
-                  }`}
-                >
-                  <ChefHat className="w-5 h-5" />
-                  <span className="text-[10px] uppercase tracking-wide">KDS</span>
-                </NavLink>
-
                 <NavLink 
                   to="/admin/financeiro" 
                   onClick={() => setIsMobileMenuOpen(false)}

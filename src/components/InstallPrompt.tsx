@@ -10,13 +10,23 @@ export default function InstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
+    // 1. Verificar se já está instalado
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      console.log('App já instalado em modo standalone');
+      return;
+    }
+
     const handler = (e: Event) => {
+      console.log('Evento beforeinstallprompt disparado!');
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShowPrompt(true);
     };
 
     window.addEventListener('beforeinstallprompt', handler as EventListener);
+    
+    // Verificação de suporte
+    console.log('Aguardando evento beforeinstallprompt...');
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handler as EventListener);
@@ -24,14 +34,15 @@ export default function InstallPrompt() {
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      console.warn('O prompt de instalação ainda não está disponível.');
+      return;
+    }
 
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     
-    if (outcome === 'accepted') {
-      console.log('User accepted the A2HS prompt');
-    }
+    console.log(`Resultado do prompt: ${outcome}`);
     
     setDeferredPrompt(null);
     setShowPrompt(false);
@@ -42,7 +53,7 @@ export default function InstallPrompt() {
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 bg-black border border-yellow-600 rounded-xl p-4 shadow-2xl flex flex-col gap-3">
       <h3 className="text-yellow-500 font-bold text-lg">Instalar Urban Prime Grill</h3>
-      <p className="text-gray-300 text-sm">Tenha nosso sistema sempre à mão. Acesso rápido e experiência aprimorada.</p>
+      <p className="text-gray-300 text-sm">Toque abaixo para instalar o app e ter acesso rápido.</p>
       <div className="flex gap-2">
         <button 
           onClick={() => setShowPrompt(false)} 
