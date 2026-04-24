@@ -153,6 +153,17 @@ export default function AdminLayout() {
           </NavLink>
 
           <NavLink 
+            to="/cozinha" 
+            className="flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all group text-ink-muted hover:text-ink hover:bg-oat border border-transparent shadow-sm bg-white"
+          >
+            <ChefHat className="w-6 h-6 transition-transform group-hover:scale-110" strokeWidth={2.5} />
+            <div className="flex flex-col">
+              <span className="font-display font-bold tracking-wide">Área da Cozinha</span>
+              <span className="text-[10px] text-ink-muted uppercase tracking-tighter">Preparação</span>
+            </div>
+          </NavLink>
+
+          <NavLink 
             to="/entregador" 
             className="flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all group text-ink-muted hover:text-ink hover:bg-oat border border-transparent shadow-sm bg-white"
           >
@@ -303,6 +314,15 @@ export default function AdminLayout() {
                 >
                   <Settings className="w-5 h-5" />
                   <span className="text-[10px] uppercase tracking-wide">Geral</span>
+                </NavLink>
+
+                <NavLink 
+                  to="/cozinha" 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-black text-white transition-all shadow-lg col-span-2"
+                >
+                  <ChefHat className="w-5 h-5 text-brand" strokeWidth={2} />
+                  <span className="text-[10px] uppercase tracking-wide">Área da Cozinha</span>
                 </NavLink>
 
                 <NavLink 

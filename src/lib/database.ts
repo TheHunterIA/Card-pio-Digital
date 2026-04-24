@@ -470,10 +470,14 @@ export async function finalizeOrder(orderId: string) {
       
       const orderData = orderSnap.data() as Order;
 
+      // Check payment status - MUST be paid
+      if (orderData.paymentStatus !== 'paid') {
+        throw new Error("O pedido só pode ser finalizado após ter sido pago.");
+      }
+
       // Update Main Order
       transaction.update(orderRef, {
         status: 'finalizado',
-        paymentStatus: 'paid',
         updatedAt: serverTimestamp()
       });
 
@@ -482,7 +486,6 @@ export async function finalizeOrder(orderId: string) {
         const sessionOrderRef = doc(db, 'sessions', orderData.sessionId, 'orders', orderId);
         transaction.update(sessionOrderRef, {
           status: 'finalizado',
-          paymentStatus: 'paid',
           updatedAt: serverTimestamp()
         });
       }
@@ -520,26 +523,22 @@ export async function markManualPayment(orderId: string) {
 
 export async function releaseTableSession(tableId: string) {
   try {
+    // 1. Get all active orders for this table outside the transaction
+    const ordersQuery = query(
+      collection(db, 'orders'),
+      where('tableNumber', '==', tableId),
+      where('status', 'not-in', ['finalizado', 'cancelado'])
+    );
+    const ordersSnap = await getDocs(ordersQuery);
+    
+    if (!ordersSnap.empty) {
+      throw new Error(`Ainda existem ${ordersSnap.size} pedidos pendentes nesta mesa.`);
+    }
+
     await runTransaction(db, async (transaction) => {
-      // 1. Get all active orders for this table
-      const ordersQuery = query(
-        collection(db, 'orders'),
-        where('tableNumber', '==', tableId),
-        where('status', 'not-in', ['finalizado', 'cancelado'])
-      );
-      const ordersSnap = await getDocs(ordersQuery);
-      
       // 2. Validate session
       const sessionRef = doc(db, 'sessions', `table-${tableId}`);
       const sessionSnap = await transaction.get(sessionRef);
-
-      // 3. Update all orders to finalized
-      ordersSnap.forEach(d => {
-        transaction.update(d.ref, { 
-          status: 'finalizado', 
-          updatedAt: serverTimestamp() 
-        });
-      });
 
       // 4. Close session
       if (sessionSnap.exists()) {
@@ -558,6 +557,14 @@ export async function releaseTableSession(tableId: string) {
 
 export async function validateAndConsumePortierPass(token: string, tableId: string): Promise<boolean> {
   try {
+    // 1. Get all active orders for this table outside the transaction
+    const ordersQuery = query(
+      collection(db, 'orders'),
+      where('tableNumber', '==', tableId),
+      where('status', 'not-in', ['finalizado', 'cancelado'])
+    );
+    const ordersSnap = await getDocs(ordersQuery);
+
     return await runTransaction(db, async (transaction) => {
       const tokenRef = doc(db, 'usedTokens', token);
       const tokenSnap = await transaction.get(tokenRef);
@@ -573,7 +580,7 @@ export async function validateAndConsumePortierPass(token: string, tableId: stri
         consumedBy: auth.currentUser?.uid || 'porter'
       });
       
-      // If it's a visitor pass, we also close the session for that table
+      // If it's a visitor pass, we also close the session and orders for that table
       const sessionRef = doc(db, 'sessions', `table-${tableId}`);
       const sessionSnap = await transaction.get(sessionRef);
       if (sessionSnap.exists() && sessionSnap.data().activeVisitorSalt) {
@@ -581,6 +588,14 @@ export async function validateAndConsumePortierPass(token: string, tableId: stri
            activeVisitorSalt: null,
            status: 'closed',
            closedAt: serverTimestamp()
+         });
+
+         // Close active orders
+         ordersSnap.forEach(d => {
+           transaction.update(d.ref, { 
+             status: 'finalizado', 
+             updatedAt: serverTimestamp() 
+           });
          });
       }
       
