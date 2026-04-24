@@ -531,8 +531,19 @@ export async function releaseTableSession(tableId: string) {
     );
     const ordersSnap = await getDocs(ordersQuery);
     
-    if (!ordersSnap.empty) {
-      throw new Error(`Ainda existem ${ordersSnap.size} pedidos pendentes nesta mesa.`);
+    // Process and check paid orders
+    ordersSnap.forEach(d => {
+      const data = d.data();
+      if (data.paymentStatus !== 'paid') {
+        throw new Error(`Pedido ${d.id} ainda não foi pago.`);
+      }
+    });
+
+    // Check again after processing
+    const ordersSnapAfter = await getDocs(ordersQuery);
+    if (!ordersSnapAfter.empty) {
+      // Still pending orders?
+      throw new Error(`Ainda existem ${ordersSnapAfter.size} pedidos pendentes nesta mesa.`);
     }
 
     await runTransaction(db, async (transaction) => {
