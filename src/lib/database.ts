@@ -323,6 +323,12 @@ export async function placeOrder(paymentMethod: PaymentMethod, deliveryFee: numb
       // 3. Create Session tracking if table order
       if (sessionId) {
         const sessionRef = doc(db, 'sessions', sessionId);
+        const sessionSnap = await transaction.get(sessionRef);
+        
+        if (sessionSnap.exists() && sessionSnap.data().status === 'closed') {
+          throw new Error("Esta mesa foi encerrada e não pode receber novos pedidos.");
+        }
+
         transaction.set(sessionRef, {
           tableNumber: state.tableNumber,
           status: 'open',
@@ -546,10 +552,19 @@ export async function releaseTableSession(tableId: string) {
 
       // 3. Mark orders as finalized
       ordersSnap.forEach(d => {
+        const orderData = d.data() as Order;
         transaction.update(d.ref, { 
           status: 'finalizado', 
           updatedAt: serverTimestamp() 
         });
+        
+        if (orderData.sessionId) {
+          const sessionOrderRef = doc(db, 'sessions', orderData.sessionId, 'orders', d.id);
+          transaction.update(sessionOrderRef, {
+            status: 'finalizado',
+            updatedAt: serverTimestamp()
+          });
+        }
       });
 
       // 4. Close session
