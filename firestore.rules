@@ -49,16 +49,17 @@ service cloud.firestore {
     }
 
     // --- Validation Helpers ---
-
     function isValidMenuItem(data) {
-      return data.keys().hasAll(['name', 'description', 'price', 'category', 'image', 'isActive', 'extras'])
-          && (data.keys().size() >= 7 && data.keys().size() <= 10)
+      return data.keys().hasAll(['name', 'description', 'price', 'category', 'image', 'isActive'])
+          && (data.keys().size() >= 6 && data.keys().size() <= 12)
           && data.name is string && data.name.size() > 0 && data.name.size() <= 100
           && data.description is string && data.description.size() <= 1000
           && data.price is number && data.price >= 0
           && data.category is string && data.category.size() > 0 && data.category.size() <= 60
           && data.isActive is bool
-          && data.extras is list;
+          && (!('extras' in data) || data.extras is list)
+          && (!('trackStock' in data) || data.trackStock is bool)
+          && (!('stockQuantity' in data) || data.stockQuantity is number);
     }
 
     function isValidOrder(data) {
@@ -75,9 +76,17 @@ service cloud.firestore {
           && (!('updatedAt' in data) || data.updatedAt is timestamp)
           && (!('whatsapp' in data) || (data.whatsapp is string && data.whatsapp.size() <= 20))
           && (!('tableNumber' in data) || (data.tableNumber is string && data.tableNumber.size() <= 20))
-          && (!('address' in data) || (data.address is string && data.address.size() <= 500))
+          && (!('address' in data) || (data.address is string && data.address.size() <= 600))
           && (!('rating' in data) || (data.rating is number && data.rating >= 1 && data.rating <= 5))
-          && (!('billRequested' in data) || data.billRequested is bool);
+          && (!('billRequested' in data) || data.billRequested is bool)
+          && (!('deviceId' in data) || data.deviceId is string)
+          && (!('deliveryCode' in data) || data.deliveryCode is string)
+          && (!('sessionId' in data) || (data.sessionId is string || data.sessionId == null))
+          && (!('subtotal' in data) || data.subtotal is number)
+          && (!('discount' in data) || data.discount is number)
+          && (!('deliveryFee' in data) || data.deliveryFee is number)
+          && (!('couponCode' in data) || (data.couponCode is string || data.couponCode == null))
+          && (!('paymentMethod' in data) || data.paymentMethod is string);
     }
 
     // --- Collections ---
@@ -103,7 +112,7 @@ service cloud.firestore {
                       // Driver Actions
                       (isDriver() && (
                         // Accept order: must be pronto-entrega -> em-rota
-                        (existing().status == 'pronto-entrega' && incoming().status == 'em-rota' && incoming().driverId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverId', 'updatedAt'])) ||
+                        (existing().status == 'pronto-entrega' && incoming().status == 'em-rota' && incoming().driverId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverId', 'driverName', 'updatedAt'])) ||
                         // Location update: status must be em-rota
                         (existing().status == 'em-rota' && existing().driverId == request.auth.uid && incoming().status == 'em-rota' && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation', 'updatedAt'])) ||
                         // Complete delivery: em-rota -> finalizado
@@ -111,7 +120,9 @@ service cloud.firestore {
                       )) ||
                       // Customer actions
                       (isSignedIn() && (existing().userId == request.auth.uid || existing().deviceId == request.auth.uid) && (
-                        // Finalize manually: only if allowed by state machine
+                        // Finalize manually: only if allowed by state machine (can update status AND payment status)
+                        (incoming().status == 'finalizado' && isStatusTransitionValid(existing().status, incoming().status) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paymentStatus', 'updatedAt'])) ||
+                        // Finalize manually (already paid)
                         (incoming().status == 'finalizado' && isStatusTransitionValid(existing().status, incoming().status) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
                         // Payment flow: pending -> paid (immutable once paid)
                         (incoming().paymentStatus == 'paid' && existing().paymentStatus == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'paymentMethod', 'updatedAt'])) ||
@@ -138,9 +149,8 @@ service cloud.firestore {
     match /clientes/{whatsapp} {
       allow read: if isAdmin() || isWaiter();
       allow get: if isSignedIn() && (existing().uid == request.auth.uid);
-      allow create, update: if isSignedIn() && incoming().uid == request.auth.uid 
-                            && (whatsapp == incoming().whatsapp || isAdmin())
-                            && incoming().lastSeen == request.time;
+      allow create, update: if (isAdmin() || isWaiter())
+                            || (isSignedIn() && incoming().uid == request.auth.uid && (whatsapp == incoming().whatsapp) && incoming().lastSeen == request.time);
     }
 
     // Admins/Staff
