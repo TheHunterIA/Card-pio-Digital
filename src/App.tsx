@@ -5,6 +5,7 @@ import CustomerLayout from './pages/customer/CustomerLayout';
 import Welcome from './pages/customer/Welcome';
 import Menu from './pages/customer/Menu';
 import ScrollToTop from './components/ScrollToTop';
+import InstallPrompt from './components/InstallPrompt';
 import ProductDetails from './pages/customer/ProductDetails';
 import Cart from './pages/customer/Cart';
 import Checkout from './pages/customer/Checkout';
@@ -51,6 +52,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <ScrollToTop />
+        <InstallPrompt />
         <Routes>
           {/* Customer PWA Routes */}
           <Route path="/" element={<CustomerLayout />}>
