@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { doc, getDoc, setDoc, serverTimestamp, query, collection, where, getDocs, writeBatch, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { finalizeOrder } from '../../lib/database';
+import { finalizeOrder, releaseTableSession, validateAndConsumePortierPass } from '../../lib/database';
 import { useStore, Order } from '../../store';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -205,23 +205,22 @@ export default function PorterDashboard() {
       }
 
       try {
-        const tokenRef = doc(db, 'usedTokens', text);
-        const tokenSnap = await getDoc(tokenRef);
+        const isValid = await validateAndConsumePortierPass(text, tableId);
 
-        if (tokenSnap.exists()) {
-          setError('Código Inválido: Este passe já foi utilizado.');
+        if (!isValid) {
+          setError('Código Inválido: Este passe já foi utilizado ou é inválido.');
           setValidating(false);
           return;
         }
 
-        await setDoc(tokenRef, { usedAt: serverTimestamp(), tableId, saltPart });
         setScanResult({
           id: `VISITOR-${tableId}-${saltPart}`,
           customerName: 'Visitante (Consumo Zero)',
           tableNumber: tableId,
           total: 0,
           isValid: true,
-          isVisitor: true
+          isVisitor: true,
+          visitorSalt: saltPart
         });
       } catch (e) {
         console.error(e);
@@ -396,38 +395,11 @@ export default function PorterDashboard() {
     
     try {
       if (scanResult.id.startsWith('VISITOR-') && scanResult.visitorSalt) {
-        // Mark the token as used so it can't be scanned again if it was a printed pass
         const today = new Date().toISOString().split('T')[0];
         const tokenStr = `UP_PASS_VISITOR_${scanResult.tableNumber}_${today}_${scanResult.visitorSalt}`;
-        await setDoc(doc(db, 'usedTokens', tokenStr), { 
-          usedAt: serverTimestamp(), 
-          tableId: scanResult.tableNumber,
-          source: 'manual_release'
-        });
-
-        // Clear visitor salt from session
-        const sessionRef = doc(db, 'sessions', `table-${scanResult.tableNumber}`);
-        await setDoc(sessionRef, { activeVisitorSalt: null, status: 'closed', closedAt: serverTimestamp() }, { merge: true });
+        await validateAndConsumePortierPass(tokenStr, scanResult.tableNumber);
       } else if (scanResult.id.startsWith('TABLE-')) {
-        const tableId = scanResult.tableNumber;
-        const q = query(
-          collection(db, 'orders'),
-          where('tableNumber', '==', tableId),
-          where('status', 'not-in', ['finalizado', 'cancelado'])
-        );
-        const snap = await getDocs(q);
-        const batch = writeBatch(db);
-        snap.forEach(d => {
-          batch.update(d.ref, { 
-            status: 'finalizado', 
-            updatedAt: serverTimestamp() 
-          });
-        });
-        await batch.commit();
-
-        // Also closing the session if it exists
-        const sessionRef = doc(db, 'sessions', `table-${tableId}`);
-        await setDoc(sessionRef, { status: 'closed', closedAt: serverTimestamp() }, { merge: true });
+        await releaseTableSession(scanResult.tableNumber);
       } else if (!scanResult.isVisitor) {
         await finalizeOrder(scanResult.id);
       }

@@ -7,7 +7,7 @@ import { useAuth } from '../../lib/AuthProvider';
 interface StaffMember {
   email: string;
   name: string;
-  role: 'waiter' | 'driver' | 'porter' | 'admin';
+  role: 'waiter' | 'driver' | 'porter' | 'admin' | 'kitchen';
 }
 
 export default function TeamManagement() {
@@ -15,7 +15,7 @@ export default function TeamManagement() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'waiter' | 'driver' | 'porter' | 'admin'>('waiter');
+  const [role, setRole] = useState<'waiter' | 'driver' | 'porter' | 'admin' | 'kitchen'>('waiter');
 
   useEffect(() => {
     console.log("TeamManagement: Setting up snapshot listener for authorized_staff");
@@ -48,6 +48,8 @@ export default function TeamManagement() {
       await setDoc(doc(db, 'authorized_waiters', safeEmail), { email: safeEmail, name, addedAt: new Date().toISOString() });
     } else if (role === 'porter') {
       await setDoc(doc(db, 'authorized_porters', safeEmail), { email: safeEmail, name, addedAt: new Date().toISOString() });
+    } else if (role === 'kitchen') {
+      await setDoc(doc(db, 'authorized_kitchen', safeEmail), { email: safeEmail, name, addedAt: new Date().toISOString() });
     }
     
     setEmail('');
@@ -66,6 +68,8 @@ export default function TeamManagement() {
       await deleteDoc(doc(db, 'authorized_waiters', safeEmail));
     } else if (member.role === 'porter') {
       await deleteDoc(doc(db, 'authorized_porters', safeEmail));
+    } else if (member.role === 'kitchen') {
+      await deleteDoc(doc(db, 'authorized_kitchen', safeEmail));
     }
   };
 
@@ -89,6 +93,7 @@ export default function TeamManagement() {
             <option value="waiter">Garçom</option>
             <option value="driver">Entregador</option>
             <option value="porter">Porteiro</option>
+            <option value="kitchen">Cozinha</option>
             {isMasterAdmin && <option value="admin">Admin do Sistema</option>}
           </select>
           <button className="bg-brand text-white p-2 rounded flex justify-center items-center" onClick={addStaff}>
@@ -111,9 +116,10 @@ export default function TeamManagement() {
                 member.role === 'admin' ? 'bg-amber-100 text-amber-800' :
                 member.role === 'driver' ? 'bg-blue-100 text-blue-800' :
                 member.role === 'waiter' ? 'bg-green-100 text-green-800' :
+                member.role === 'kitchen' ? 'bg-orange-100 text-orange-800' :
                 'bg-gray-100 text-gray-800'
               }`}>
-                {member.role}
+                {member.role === 'kitchen' ? 'Cozinha' : member.role}
               </span>
               {(isMasterAdmin || member.role !== 'admin') && (
                 <button className="text-ink-muted hover:text-red-500 transition-colors bg-oat hover:bg-red-50 p-2 rounded-xl" onClick={() => removeStaff(member)}>

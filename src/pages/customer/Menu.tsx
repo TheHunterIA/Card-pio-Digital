@@ -5,7 +5,7 @@ import { Search, UtensilsCrossed, AlertTriangle, MapPin, ShieldCheck, Navigation
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { subscribeToSession, subscribeToMenu } from '../../lib/database';
+import { subscribeToSession, subscribeToMenuRevision, loadMenuWithCache } from '../../lib/database';
 
 export default function Menu() {
   const navigate = useNavigate();
@@ -38,8 +38,11 @@ export default function Menu() {
 
   // Subscribe to menu
   useEffect(() => {
-    const unsub = subscribeToMenu();
-    return () => unsub();
+    loadMenuWithCache();
+    const unsubRevision = subscribeToMenuRevision(() => {
+      loadMenuWithCache();
+    });
+    return () => unsubRevision();
   }, []);
 
   // Sync session based on URL or existing session

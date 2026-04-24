@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useStore, OrderStatus as StatusType, Order } from '../../store';
-import { updateOrderStatus, confirmPayment } from '../../lib/database';
+import { updateOrderStatus, confirmPayment, cancelOrder } from '../../lib/database';
 import { Clock, ChefHat, Motorbike, Check, AlertCircle, Package, MessageCircle, Info, History, X, Phone, Receipt, Printer, UtensilsCrossed } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, parseISO } from 'date-fns';
@@ -9,7 +9,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import PrintTicket from '../../components/PrintTicket';
 
-export default function KDS() {
+export default function KitchenDashboard() {
   const orders = useStore(state => state.orders);
   const [selectedHabitCustomer, setSelectedHabitCustomer] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
@@ -75,7 +75,7 @@ export default function KDS() {
 
   const handleCancelOrder = (order: Order) => {
     if (window.confirm(`Tem certeza que deseja CANCELAR o pedido de ${order.customerName}? Essa ação não pode ser desfeita.`)) {
-      updateOrderStatus(order.id, 'cancelado');
+      cancelOrder(order.id);
       
       if (order.whatsapp) {
         setTimeout(() => {
@@ -106,7 +106,7 @@ export default function KDS() {
       <div className="h-full flex flex-col p-4 md:p-8 overflow-y-auto md:overflow-hidden bg-oat">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-3xl border border-black/5 shadow-sm shrink-0">
           <div>
-            <h2 className="text-2xl font-display font-bold text-ink tracking-tight uppercase">Dashboard de Produção</h2>
+            <h2 className="text-2xl font-display font-bold text-ink tracking-tight uppercase">Dashboard da Cozinha</h2>
             <p className="text-ink-muted text-xs font-display font-bold uppercase tracking-widest mt-1">Fluxo: Fila → Preparo → A Caminho</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Settings, LogOut, UtensilsCrossed, Truck, Map, Users, QrCode, BookOpen, Menu, X, Contact, BarChart3, User, Shield } from 'lucide-react';
+import { Settings, LogOut, UtensilsCrossed, Truck, Map, Users, QrCode, BookOpen, Menu, X, Contact, BarChart3, User, Shield, ChefHat } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../lib/AuthProvider';
-import { subscribeToMenu, subscribeToOrders, subscribeToCustomers } from '../../lib/database';
+import { loadMenuWithCache, subscribeToOrders, subscribeToCustomers } from '../../lib/database';
 
 export default function AdminLayout() {
   const { user, isAdmin, loading, logout } = useAuth();
@@ -12,11 +12,10 @@ export default function AdminLayout() {
   useEffect(() => {
     // Only subscribe if admin is loaded and logged in
     if (!loading && isAdmin) {
-      const unsubMenu = subscribeToMenu();
+      loadMenuWithCache();
       const unsubOrders = subscribeToOrders();
       const unsubCustomers = subscribeToCustomers();
       return () => {
-        unsubMenu();
         unsubOrders();
         unsubCustomers();
       };
@@ -74,13 +73,13 @@ export default function AdminLayout() {
 
         <nav className="flex-1 px-5 space-y-3 mt-8">
           <NavLink 
-            to="/admin/kds" 
+            to="/cozinha" 
             className={({isActive}) => `flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all group ${
               isActive ? 'bg-brand text-white shadow-md' : 'text-ink-muted hover:text-ink hover:bg-oat border border-transparent'
             }`}
           >
-            <LayoutDashboard className={`w-6 h-6 transition-transform ${({isActive}) => isActive ? '' : 'group-hover:scale-110'}`} strokeWidth={2.5} />
-            <span className="font-display font-bold tracking-wide">KDS (Cozinha)</span>
+            <ChefHat className={`w-6 h-6 transition-transform group-hover:scale-110`} strokeWidth={2.5} />
+            <span className="font-display font-bold tracking-wide">Cozinha (KDS)</span>
           </NavLink>
 
           <NavLink 
@@ -229,13 +228,13 @@ export default function AdminLayout() {
 
               <div className="grid grid-cols-2 gap-3">
                 <NavLink 
-                  to="/admin/kds" 
+                  to="/cozinha" 
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={({isActive}) => `flex items-center gap-3 p-4 rounded-2xl border transition-all ${
+                  className={({isActive}) => `flex items-center justify-center gap-2 p-3 rounded-xl border transition-all ${
                     isActive ? 'bg-brand text-white border-brand shadow-md' : 'bg-oat border-black/5 text-ink font-bold'
                   }`}
                 >
-                  <LayoutDashboard className="w-5 h-5" />
+                  <ChefHat className="w-5 h-5" />
                   <span className="text-[10px] uppercase tracking-wide">KDS</span>
                 </NavLink>
 

@@ -16,19 +16,22 @@ service cloud.firestore {
     }
     
     function isAdmin() { 
-      return isMasterAdmin() || (isSignedIn() && (
+      return isEmailVerified() && (isMasterAdmin() || (isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
         ((request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_admins/$(request.auth.token.email.lower())))
-      )); 
+      ))); 
     }
     function isDriver() {
-      return isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_drivers/$(request.auth.token.email.lower()));
+      return isEmailVerified() && isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_drivers/$(request.auth.token.email.lower()));
     }
     function isWaiter() {
-      return isMasterAdmin() || (isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_waiters/$(request.auth.token.email.lower())));
+      return isEmailVerified() && (isMasterAdmin() || (isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_waiters/$(request.auth.token.email.lower()))));
+    }
+    function isKitchen() {
+      return isEmailVerified() && (isMasterAdmin() || (isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_kitchen/$(request.auth.token.email.lower()))));
     }
     function isPorteiro() {
-      return isMasterAdmin() || (isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_porters/$(request.auth.token.email.lower())));
+      return isEmailVerified() && (isMasterAdmin() || (isSignedIn() && (request.auth.token.email is string) && exists(/databases/$(database)/documents/authorized_porters/$(request.auth.token.email.lower()))));
     }
     function isValidId(id) { 
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
@@ -38,12 +41,12 @@ service cloud.firestore {
     function isStatusTransitionValid(oldStatus, newStatus) {
       // Regras de transição lógica de estado
       return (oldStatus == newStatus)
-          || (oldStatus == 'na-fila' && newStatus == 'preparando')
-          || (oldStatus == 'na-fila' && newStatus == 'cancelado')
+          || (oldStatus == 'na-fila' && (newStatus == 'preparando' || newStatus == 'cancelado'))
           || (oldStatus == 'preparando' && (newStatus == 'servido' || newStatus == 'pronto-entrega' || newStatus == 'cancelado'))
-          || (oldStatus == 'pronto-entrega' && (newStatus == 'em-rota' || newStatus == 'cancelado'))
+          || (oldStatus == 'pronto-entrega' && (newStatus == 'em-rota' || newStatus == 'saiu-entrega' || newStatus == 'cancelado'))
+          || (oldStatus == 'saiu-entrega' && (newStatus == 'em-rota' || newStatus == 'finalizado' || newStatus == 'cancelado'))
+          || (oldStatus == 'em-rota' && (newStatus == 'finalizado' || newStatus == 'cancelado'))
           || (oldStatus == 'servido' && newStatus == 'finalizado')
-          || (oldStatus == 'em-rota' && newStatus == 'finalizado')
           // Admin override para cancelamento (exceto se já tiver finalizado)
           || (isAdmin() && oldStatus != 'finalizado' && newStatus == 'cancelado');
     }
@@ -93,10 +96,10 @@ service cloud.firestore {
 
     // Orders Collection
     match /orders/{orderId} {
-      allow list: if isAdmin() || isWaiter() || isPorteiro() || isDriver() 
+      allow list: if isAdmin() || isWaiter() || isPorteiro() || isDriver() || isKitchen()
                   || (isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.deviceId == request.auth.uid));
       
-      allow get: if isValidId(orderId) && (isAdmin() || isWaiter() || isPorteiro() || isDriver() 
+      allow get: if isValidId(orderId) && (isAdmin() || isWaiter() || isPorteiro() || isDriver() || isKitchen()
                   || (isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.deviceId == request.auth.uid)));
       
       allow create: if isValidId(orderId)
@@ -108,15 +111,15 @@ service cloud.firestore {
       allow update: if isValidId(orderId) 
                     && isValidOrder(incoming())
                     && (
-                      isAdmin() || isWaiter() ||
+                      isAdmin() || isWaiter() || isKitchen() ||
                       // Driver Actions
                       (isDriver() && (
-                        // Accept order: must be pronto-entrega -> em-rota
-                        (existing().status == 'pronto-entrega' && incoming().status == 'em-rota' && incoming().driverId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverId', 'driverName', 'updatedAt'])) ||
+                        // Accept order: must be pronto-entrega -> em-rota/saiu-entrega
+                        ((existing().status == 'pronto-entrega' || existing().status == 'saiu-entrega') && (incoming().status == 'em-rota' || incoming().status == 'saiu-entrega') && incoming().driverId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverId', 'driverName', 'updatedAt'])) ||
                         // Location update: status must be em-rota
-                        (existing().status == 'em-rota' && existing().driverId == request.auth.uid && incoming().status == 'em-rota' && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation', 'updatedAt'])) ||
+                        ((existing().status == 'em-rota' || existing().status == 'saiu-entrega') && existing().driverId == request.auth.uid && incoming().status == existing().status && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation', 'updatedAt'])) ||
                         // Complete delivery: em-rota -> finalizado
-                        (existing().status == 'em-rota' && existing().driverId == request.auth.uid && incoming().status == 'finalizado' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+                        ((existing().status == 'em-rota' || existing().status == 'saiu-entrega') && existing().driverId == request.auth.uid && incoming().status == 'finalizado' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
                       )) ||
                       // Customer actions
                       (isSignedIn() && (existing().userId == request.auth.uid || existing().deviceId == request.auth.uid) && (
@@ -135,6 +138,10 @@ service cloud.firestore {
                     // Global Integrity Guards
                     && incoming().userId == existing().userId
                     && incoming().createdAt == existing().createdAt
+                    && (isAdmin() || isWaiter() || isKitchen() || (
+                      incoming().total == existing().total &&
+                      incoming().items == existing().items
+                    ))
                     && incoming().updatedAt == request.time
                     && (incoming().status == existing().status || isStatusTransitionValid(existing().status, incoming().status));
     }
@@ -145,9 +152,15 @@ service cloud.firestore {
       allow write: if isAdmin() && isValidId(menuId) && isValidMenuItem(incoming());
     }
 
+    // Menu Metadata
+    match /menu_meta/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Clientes Collection
     match /clientes/{whatsapp} {
-      allow read: if isAdmin() || isWaiter();
+      allow read: if isAdmin() || isWaiter() || isKitchen();
       allow get: if isSignedIn() && (existing().uid == request.auth.uid);
       allow create, update: if (isAdmin() || isWaiter())
                             || (isSignedIn() && incoming().uid == request.auth.uid && (whatsapp == incoming().whatsapp) && incoming().lastSeen == request.time);
@@ -171,6 +184,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /authorized_porters/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /authorized_kitchen/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }

@@ -12,6 +12,7 @@ interface AuthContextType {
   isDriver: boolean;
   isWaiter: boolean;
   isPorteiro: boolean;
+  isKitchen: boolean;
   isMasterAdmin: boolean;
   loading: boolean;
   signInAsAdmin: () => Promise<void>;
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isDriver, setIsDriver] = useState(false);
   const [isWaiter, setIsWaiter] = useState(false);
   const [isPorteiro, setIsPorteiro] = useState(false);
+  const [isKitchen, setIsKitchen] = useState(false);
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           let isDr = false;
           let isWt = false;
           let isPt = false;
+          let isKt = false;
           
           if (!isMasterAdmin) {
             try {
@@ -84,6 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 // Checa porteiro
                 const porterDoc = await getDocFromServer(doc(db, 'authorized_porters', safeEmail));
                 isPt = porterDoc.exists();
+
+                // Checa cozinha
+                const kitchenDoc = await getDocFromServer(doc(db, 'authorized_kitchen', safeEmail));
+                isKt = kitchenDoc.exists();
               } catch (staffErr) {
                 console.error("Error querying staff collection:", staffErr);
               }
@@ -93,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isDr = true;
             isWt = true;
             isPt = true;
+            isKt = true;
             try {
               await setDoc(doc(db, 'admins', currentUser.uid), { email: currentUser.email }, { merge: true });
             } catch (e) {
@@ -100,11 +108,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
           
-          console.log("AuthProvider: Permissions - Admin:", isAdm, "Driver:", isDr, "Waiter:", isWt, "Porter:", isPt);
+          console.log("AuthProvider: Permissions - Admin:", isAdm, "Driver:", isDr, "Waiter:", isWt, "Porter:", isPt, "Kitchen:", isKt);
           setIsAdmin(isAdm);
           setIsDriver(isDr);
           setIsWaiter(isWt);
           setIsPorteiro(isPt);
+          setIsKitchen(isKt);
           setIsMasterAdmin(isMasterAdmin);
           
           if ((isAdm || isDr || isWt || isPt) && !unsubOrders) {
@@ -124,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsDriver(false);
         setIsWaiter(false);
         setIsPorteiro(false);
+        setIsKitchen(false);
         setIsMasterAdmin(false);
         useStore.getState().setOrders([]);
         
@@ -162,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, isDriver, isWaiter, isPorteiro, isMasterAdmin, loading, signInAsAdmin, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, isDriver, isWaiter, isPorteiro, isKitchen, isMasterAdmin, loading, signInAsAdmin, logout }}>
       {!loading && children}
     </AuthContext.Provider>
   );

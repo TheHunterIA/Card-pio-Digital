@@ -12,7 +12,6 @@ import OrderStatus from './pages/customer/OrderStatus';
 import Orders from './pages/customer/Orders';
 
 import AdminLayout from './pages/admin/AdminLayout';
-import KDS from './pages/admin/KDS';
 import MenuSettings from './pages/admin/MenuSettings';
 import FleetMap from './pages/admin/FleetMap';
 import TeamManagement from './pages/admin/TeamManagement';
@@ -22,6 +21,10 @@ import Customers from './pages/admin/Customers';
 import Settings from './pages/admin/Settings';
 import Financial from './pages/admin/Financial';
 import AdminLogin from './pages/admin/AdminLogin';
+
+import KitchenLayout from './pages/kitchen/KitchenLayout';
+import KitchenDashboard from './pages/kitchen/KitchenDashboard';
+import KitchenLogin from './pages/kitchen/KitchenLogin';
 
 import DriverLayout from './pages/driver/DriverLayout';
 import DriverDashboard from './pages/driver/DriverDashboard';
@@ -64,8 +67,7 @@ export default function App() {
           {/* Lojista / KDS Routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Navigate to="/admin/kds" replace />} />
-            <Route path="kds" element={<KDS />} />
+            <Route index element={<Navigate to="/admin/cardapio" replace />} />
             <Route path="cardapio" element={<MenuSettings />} />
             <Route path="logistica" element={<LogisticsSettings />} />
             <Route path="frota" element={<FleetMap />} />
@@ -75,6 +77,12 @@ export default function App() {
             <Route path="financeiro" element={<Financial />} />
             <Route path="qrcode" element={<QRCodes />} />
             <Route path="config" element={<Settings />} />
+          </Route>
+
+          {/* Cozinha Routes */}
+          <Route path="/cozinha/login" element={<KitchenLogin />} />
+          <Route path="/cozinha" element={<KitchenLayout />}>
+            <Route index element={<KitchenDashboard />} />
           </Route>
 
           {/* Entregador Routes */}

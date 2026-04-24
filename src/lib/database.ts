@@ -1,30 +1,70 @@
-import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, onSnapshot, getDocs, getDoc, runTransaction } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, onSnapshot, getDocs, getDoc, runTransaction, where } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { handleFirestoreError } from './firebaseError';
 import { MenuItem, Order, OrderStatus, PaymentMethod, useStore, CartItem, DeliveryConfig } from '../store';
 
 // Set up listeners that directly sync into the Zustand store
-export function subscribeToMenu() {
+export function subscribeToMenuRevision(onInvalidate: () => void) {
+  const metaRef = doc(db, 'menu_meta', 'revision');
+  return onSnapshot(metaRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const newRevision = snapshot.data().revision;
+      const cachedRevision = localStorage.getItem('menu_revision');
+      if (cachedRevision && newRevision !== cachedRevision) {
+        console.log("Revisão do menu alterada, invalidando cache.");
+        onInvalidate();
+      }
+    }
+  });
+}
+
+export async function loadMenuWithCache() {
   if (!db) {
     console.error("Firestore não inicializado corretamente.");
-    return () => {};
+    return;
   }
+  
   try {
-    const q = query(collection(db, 'menu'));
-    return onSnapshot(q, (snapshot) => {
+    const metaRef = doc(db, 'menu_meta', 'revision');
+    const metaSnap = await getDoc(metaRef);
+    const currentRevision = metaSnap.exists() ? metaSnap.data().revision : '0';
+    
+    const cachedMenu = localStorage.getItem('menu_cache');
+    const cachedRevision = localStorage.getItem('menu_revision');
+
+    if (cachedMenu && cachedRevision === currentRevision) {
+      console.log("Carregando menu do cache.");
+      useStore.getState().setMenu(JSON.parse(cachedMenu));
+    } else {
+      console.log("Carregando menu do Firestore.");
+      const q = query(collection(db, 'menu'));
+      const snapshot = await getDocs(q);
       const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MenuItem));
+      
+      localStorage.setItem('menu_cache', JSON.stringify(items));
+      localStorage.setItem('menu_revision', currentRevision);
       useStore.getState().setMenu(items);
-    }, (error) => {
-      console.error("Menu sync error:", error);
-    });
+    }
   } catch (e) {
-    console.error("Erro ao assinar snapshot do menu:", e);
-    return () => {};
+    console.error("Erro ao carregar menu:", e);
+  }
+}
+
+async function updateMenuRevision() {
+  try {
+    const metaRef = doc(db, 'menu_meta', 'revision');
+    await setDoc(metaRef, { revision: Date.now().toString() });
+  } catch (e) {
+    console.error("Erro ao atualizar revisão do menu:", e);
   }
 }
 
 export function subscribeToOrders() {
-  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+  const q = query(
+    collection(db, 'orders'),
+    where('status', 'not-in', ['finalizado', 'cancelado']),
+    orderBy('createdAt', 'desc')
+  );
   let isInitialRender = true;
 
   return onSnapshot(q, (snapshot) => {
@@ -59,7 +99,10 @@ export function subscribeToOrders() {
 }
 
 export function subscribeToCustomers() {
-  const q = query(collection(db, 'clientes'));
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+  const q = query(collection(db, 'clientes'), where('lastSeen', '>=', sixtyDaysAgo));
   return onSnapshot(q, (snapshot) => {
     const customers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     useStore.getState().setCustomers(customers);
@@ -93,6 +136,7 @@ export async function addMenuItem(item: Omit<MenuItem, 'id' | 'isActive'>) {
   const newRef = doc(collection(db, 'menu'));
   try {
     await setDoc(newRef, { ...item, isActive: true });
+    await updateMenuRevision();
   } catch (error) {
     handleFirestoreError(error, 'create', `menu/${newRef.id}`, auth.currentUser);
   }
@@ -102,6 +146,7 @@ export async function toggleMenuItem(id: string, currentStatus: boolean) {
   try {
     const ref = doc(db, 'menu', id);
     await updateDoc(ref, { isActive: !currentStatus });
+    await updateMenuRevision();
   } catch (error) {
     handleFirestoreError(error, 'update', `menu/${id}`, auth.currentUser);
   }
@@ -111,6 +156,7 @@ export async function deleteMenuItem(id: string) {
   try {
     const ref = doc(db, 'menu', id);
     await deleteDoc(ref);
+    await updateMenuRevision();
   } catch (error) {
     handleFirestoreError(error, 'delete', `menu/${id}`, auth.currentUser);
   }
@@ -120,6 +166,7 @@ export async function updateMenuPrice(id: string, newPrice: number) {
   try {
     const ref = doc(db, 'menu', id);
     await updateDoc(ref, { price: newPrice });
+    await updateMenuRevision();
   } catch (error) {
     handleFirestoreError(error, 'update', `menu/${id}`, auth.currentUser);
   }
@@ -130,6 +177,7 @@ export async function updateMenuItem(id: string, item: Partial<MenuItem>) {
     const ref = doc(db, 'menu', id);
     const { id: _, ...data } = item as any;
     await updateDoc(ref, data);
+    await updateMenuRevision();
   } catch (error) {
     handleFirestoreError(error, 'update', `menu/${id}`, auth.currentUser);
   }
@@ -361,12 +409,83 @@ export async function updateDriverLocation(orderId: string, lat: number, lng: nu
   }
 }
 
+export async function cancelOrder(orderId: string) {
+  try {
+    await runTransaction(db, async (transaction) => {
+      const orderRef = doc(db, 'orders', orderId);
+      const orderSnap = await transaction.get(orderRef);
+      
+      if (!orderSnap.exists()) throw new Error("Pedido não encontrado.");
+      
+      const orderData = orderSnap.data() as Order;
+      
+      // Se já estiver cancelado, não faz nada
+      if (orderData.status === 'cancelado') return;
+
+      // 1. Return Stock
+      for (const cartItem of orderData.items) {
+        const itemRef = doc(db, 'menu', cartItem.menuItemId);
+        const itemSnap = await transaction.get(itemRef);
+        
+        if (itemSnap.exists()) {
+          const itemData = itemSnap.data();
+          if (itemData.trackStock) {
+            const currentStock = itemData.stockQuantity || 0;
+            const newStock = currentStock + cartItem.quantity;
+            transaction.update(itemRef, { 
+              stockQuantity: newStock,
+              isActive: true // Re-activate if it was disabled due to stock
+            });
+          }
+        }
+      }
+
+      // 2. Update Order Status
+      transaction.update(orderRef, {
+        status: 'cancelado',
+        updatedAt: serverTimestamp()
+      });
+
+      // 3. Update session if exists
+      if (orderData.sessionId) {
+        const sessionOrderRef = doc(db, 'sessions', orderData.sessionId, 'orders', orderId);
+        transaction.update(sessionOrderRef, {
+          status: 'cancelado',
+          updatedAt: serverTimestamp()
+        });
+      }
+    });
+  } catch (error) {
+    handleFirestoreError(error, 'update', `orders/${orderId}`, auth.currentUser);
+  }
+}
+
 export async function finalizeOrder(orderId: string) {
   try {
-    await updateDoc(doc(db, 'orders', orderId), {
-      status: 'finalizado',
-      paymentStatus: 'paid',
-      updatedAt: serverTimestamp()
+    await runTransaction(db, async (transaction) => {
+      const orderRef = doc(db, 'orders', orderId);
+      const orderSnap = await transaction.get(orderRef);
+      
+      if (!orderSnap.exists()) throw new Error("Pedido não encontrado.");
+      
+      const orderData = orderSnap.data() as Order;
+
+      // Update Main Order
+      transaction.update(orderRef, {
+        status: 'finalizado',
+        paymentStatus: 'paid',
+        updatedAt: serverTimestamp()
+      });
+
+      // Update session order copy if it exists
+      if (orderData.sessionId) {
+        const sessionOrderRef = doc(db, 'sessions', orderData.sessionId, 'orders', orderId);
+        transaction.update(sessionOrderRef, {
+          status: 'finalizado',
+          paymentStatus: 'paid',
+          updatedAt: serverTimestamp()
+        });
+      }
     });
   } catch (error) {
     handleFirestoreError(error, 'update', `orders/${orderId}`, auth.currentUser);
@@ -396,5 +515,79 @@ export async function markManualPayment(orderId: string) {
     });
   } catch (error) {
     handleFirestoreError(error, 'update', `orders/${orderId}`, auth.currentUser);
+  }
+}
+
+export async function releaseTableSession(tableId: string) {
+  try {
+    await runTransaction(db, async (transaction) => {
+      // 1. Get all active orders for this table
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        where('tableNumber', '==', tableId),
+        where('status', 'not-in', ['finalizado', 'cancelado'])
+      );
+      const ordersSnap = await getDocs(ordersQuery);
+      
+      // 2. Validate session
+      const sessionRef = doc(db, 'sessions', `table-${tableId}`);
+      const sessionSnap = await transaction.get(sessionRef);
+
+      // 3. Update all orders to finalized
+      ordersSnap.forEach(d => {
+        transaction.update(d.ref, { 
+          status: 'finalizado', 
+          updatedAt: serverTimestamp() 
+        });
+      });
+
+      // 4. Close session
+      if (sessionSnap.exists()) {
+        transaction.update(sessionRef, { 
+          status: 'closed', 
+          activeVisitorSalt: null,
+          closedAt: serverTimestamp() 
+        });
+      }
+    });
+  } catch (error) {
+    console.error("Failed to release table session", error);
+    throw error;
+  }
+}
+
+export async function validateAndConsumePortierPass(token: string, tableId: string): Promise<boolean> {
+  try {
+    return await runTransaction(db, async (transaction) => {
+      const tokenRef = doc(db, 'usedTokens', token);
+      const tokenSnap = await transaction.get(tokenRef);
+      
+      if (tokenSnap.exists()) {
+        return false; // Already used
+      }
+      
+      // Consume token
+      transaction.set(tokenRef, { 
+        usedAt: serverTimestamp(), 
+        tableId,
+        consumedBy: auth.currentUser?.uid || 'porter'
+      });
+      
+      // If it's a visitor pass, we also close the session for that table
+      const sessionRef = doc(db, 'sessions', `table-${tableId}`);
+      const sessionSnap = await transaction.get(sessionRef);
+      if (sessionSnap.exists() && sessionSnap.data().activeVisitorSalt) {
+         transaction.update(sessionRef, {
+           activeVisitorSalt: null,
+           status: 'closed',
+           closedAt: serverTimestamp()
+         });
+      }
+      
+      return true;
+    });
+  } catch (error) {
+    console.error("Pass validation error:", error);
+    return false;
   }
 }
