@@ -128,15 +128,9 @@ export default function PorterDashboard() {
           warning: 'Este pass foi gerado pelo Garçom. Clique em Liberar para validar.'
         });
       } else {
-        setScanResult({
-          id: `VISITOR-${tableId}`,
-          customerName: 'Acesso Visitante',
-          tableNumber: tableId,
-          total: 0,
-          isValid: true,
-          isVisitor: true,
-          warning: 'Nenhuma comanda ou passe ativo. Liberar comanda em branco?'
-        });
+        // No orders and no active visitor pass - do not allow releasing
+        setScanResult(null);
+        setError(`Mesa ${tableId} está livre.`);
       }
       return;
     }
@@ -597,9 +591,34 @@ export default function PorterDashboard() {
                 className="relative"
               >
                 <div className="bg-white rounded-[32px] md:rounded-[40px] border border-black/5 overflow-hidden shadow-sm">
-                  <div className="p-6 md:p-8 border-b border-black/5">
-                    <h3 className="text-sm font-display font-black text-ink uppercase tracking-widest leading-none">Câmera de Leitura</h3>
-                    <p className="text-[9px] md:text-[10px] text-ink-muted font-bold uppercase mt-2 tracking-widest leading-relaxed">Aguardando apresentação do QR Code</p>
+                  <div className="p-6 md:p-8 border-b border-black/5 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-sm font-display font-black text-ink uppercase tracking-widest leading-none">Câmera de Leitura</h3>
+                      <p className="text-[9px] md:text-[10px] text-ink-muted font-bold uppercase mt-2 tracking-widest leading-relaxed">Aguardando apresentação ou arquivo</p>
+                    </div>
+                    <label className="cursor-pointer bg-brand/10 text-brand px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand/20 transition-all">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          
+                          setScanning(false);
+                          setValidating(true);
+                          try {
+                            const decodedText = await Html5Qrcode.scanFile(file, true);
+                            validatePass(decodedText);
+                          } catch (err) {
+                            console.error(err);
+                            setError('Erro ao ler QR Code da imagem.');
+                            setValidating(false);
+                          }
+                        }}
+                      />
+                      Galeria
+                    </label>
                   </div>
 
                   <div className="relative aspect-square sm:aspect-video md:aspect-[16/10] bg-black group">
