@@ -353,7 +353,8 @@ export async function updateDriverLocation(orderId: string, lat: number, lng: nu
         lat,
         lng,
         updatedAt: new Date().toISOString()
-      }
+      },
+      updatedAt: serverTimestamp()
     });
   } catch (error) {
     handleFirestoreError(error, 'update', `orders/${orderId}`, auth.currentUser);

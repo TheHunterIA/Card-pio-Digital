@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, collection, query, where, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, collection, query, where, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useStore, Order } from '../../store';
 import { updateOrderStatus, finalizeOrder } from '../../lib/database';
@@ -206,7 +206,10 @@ export default function OrderStatus() {
   const handleRequestBill = async () => {
     if (!order) return;
     try {
-      await updateDoc(doc(db, 'orders', order.id), { billRequested: true });
+      await updateDoc(doc(db, 'orders', order.id), { 
+        billRequested: true,
+        updatedAt: serverTimestamp()
+      });
       setBillRequested(true);
     } catch (e) {
       console.error(e);
@@ -217,7 +220,10 @@ export default function OrderStatus() {
     if (!order || hasRated) return;
     setRating(value);
     try {
-      await updateDoc(doc(db, 'orders', order.id), { rating: value });
+      await updateDoc(doc(db, 'orders', order.id), { 
+        rating: value,
+        updatedAt: serverTimestamp()
+      });
       setHasRated(true);
     } catch (e) {
       console.error(e);
